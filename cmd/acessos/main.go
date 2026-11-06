@@ -728,8 +728,6 @@ func runApp(w *app.Window, th *material.Theme, bar *tabBar, recarregar func(),
 			janelaMaximizada = e.Config.Mode != app.Windowed
 
 		case app.FrameEvent:
-			// a marca é recalculada a cada quadro pelos campos de texto
-			focoEmCampo.Store(false)
 			est.atualizarInibicao(activeTab())
 			paletaMaterial(th)
 			gtx := app.NewContext(&ops, e)
@@ -741,8 +739,17 @@ func runApp(w *app.Window, th *material.Theme, bar *tabBar, recarregar func(),
 			// Teclado e clipboard fora do Linux (Windows) passam pelo
 			// próprio Gio, não pelo grab — ver entrada_outros.go. No
 			// Linux estas duas só repassam pro caminho de sempre.
-			tratarTecladoFrame(w, gtx, activeTab)
+			tratarTecladoFrame(est, gtx, activeTab)
 			tratarClipboardFrame(est, gtx, activeTab)
+			// A marca de campo em foco é recalculada a cada quadro pelos
+			// próprios campos, durante o layout logo abaixo — e só pode ser
+			// zerada DEPOIS de quem a lê no começo do quadro
+			// (atualizarInibicao, tratarTecladoFrame). Zerada antes, como
+			// era, ela dizia sempre "não" a eles: no Windows o campo de
+			// busca perdia o foco para a sessão a cada quadro, e no Linux a
+			// inibição dos atalhos do compositor ficava ligada com o cursor
+			// num campo.
+			focoEmCampo.Store(false)
 			// A escala da interface entra AQUI, antes de qualquer layout:
 			// tudo o que é medido em Dp ou Sp no quadro já nasce no
 			// tamanho escolhido, sem cada widget precisar saber disso.
@@ -941,6 +948,15 @@ func querTeclado(t Tab) bool {
 		return true
 	}
 	return false
+}
+
+// receptorTexto é a aba que quer o CARACTERE, não a posição da tecla (SSH
+// e VNC; o RDP fica de fora, ele repassa por posição). No Windows o texto
+// chega pronto do sistema — layout, Shift, acento e AltGr resolvidos — e
+// é entregue por aqui; ver teclado_outros.go. No Linux não é chamado: o
+// grab já entrega o keysym resolvido pelo layout.
+type receptorTexto interface {
+	HandleTexto(s string)
 }
 
 // Posição da área de conteúdo na janela, atualizada a cada quadro. O menu

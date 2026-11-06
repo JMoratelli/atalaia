@@ -1,5 +1,11 @@
 package main
 
+import (
+	"fmt"
+	"strings"
+	"unicode"
+)
+
 // Tradução de tecla física (o que o internal/grab entrega, direto do
 // Wayland) para os bytes que um terminal espera. O grab dá keysym X11 já
 // resolvido pelo layout ativo, então acento e pontuação saem certos sem
@@ -71,20 +77,62 @@ var especiais = map[uint32]string{
 	0xffc9: "\x1b[24~", // F12
 }
 
+// csiModificavel: teclas de cursor, edição e função que, com Shift, Alt ou
+// Ctrl, mudam de sequência na convenção do xterm — a que gnome-terminal,
+// Konsole e o Windows Terminal seguem: "\x1b[<n>;<mod><final>". Sem
+// modificador continuam saindo como em especiais.
+var csiModificavel = map[uint32]struct {
+	n     string
+	final byte
+}{
+	0xff52: {"1", 'A'}, // Up
+	0xff54: {"1", 'B'}, // Down
+	0xff53: {"1", 'C'}, // Right
+	0xff51: {"1", 'D'}, // Left
+	0xff50: {"1", 'H'}, // Home
+	0xff57: {"1", 'F'}, // End
+	0xff63: {"2", '~'}, // Insert
+	0xffff: {"3", '~'}, // Delete
+	0xff55: {"5", '~'}, // Page Up
+	0xff56: {"6", '~'}, // Page Down
+	0xffbe: {"1", 'P'}, // F1
+	0xffbf: {"1", 'Q'}, // F2
+	0xffc0: {"1", 'R'}, // F3
+	0xffc1: {"1", 'S'}, // F4
+	0xffc2: {"15", '~'},
+	0xffc3: {"17", '~'},
+	0xffc4: {"18", '~'},
+	0xffc5: {"19", '~'},
+	0xffc6: {"20", '~'},
+	0xffc7: {"21", '~'},
+	0xffc8: {"23", '~'},
+	0xffc9: {"24", '~'}, // F12
+}
+
+// ksISOLeftTab é o keysym que o xkb dá para Shift+Tab no Linux.
+const ksISOLeftTab = 0xfe20
+
 // bytesDaTecla traduz um keysym (com os modificadores correntes) para os
 // bytes a mandar. Devolve nil quando a tecla não produz nada.
 func bytesDaTecla(keysym uint32, m modificadores) []byte {
-	// Ctrl+Delete apaga a PALAVRA à frente do cursor — a sequência que
-	// xterm/gnome-terminal mandam de verdade para Delete com um
-	// modificador (aqui, 5 = Ctrl; ver a convenção CSI-com-modificador do
-	// xterm). Testado na prática contra os dois alvos que importam: o
-	// nano tem bind de fábrica pra ela ("chopwordright"), e o bash
-	// moderno (readline ≥ 8.1) também já reconhece de fábrica, sem
-	// precisar de nada no .inputrc remoto. "\x1bd" (Meta-d, kill-word do
-	// readline) foi a primeira tentativa, mas o nano ignora — só entende
-	// a sequência de terminal de verdade.
-	if keysym == ksDelete && m.ctrl {
-		return []byte("\x1b[3;5~")
+	// Shift+Tab é "tabulação para trás" (CBT), que menus de terminal
+	// (nmtui, mc, dialog) usam para voltar um campo. No Linux ele chega
+	// como ISO_Left_Tab, que não estava em especiais e não mandava nada;
+	// no Windows chega como Tab com Shift, e mandava um Tab comum.
+	if keysym == ksISOLeftTab || keysym == 0xff09 && m.shift {
+		return []byte("\x1b[Z")
+	}
+	// Seta, Home/End, PgUp/PgDn, Insert/Delete e F1-F12 com modificador:
+	// a forma CSI do xterm, com o parâmetro 1 + Shift + 2·Alt + 4·Ctrl.
+	// É o que faz Ctrl+←/→ pular palavra no bash (o inputrc das
+	// distribuições amarra "\e[1;5C"/"\e[1;5D"), Shift+seta marcar texto
+	// e Ctrl+Home/End ir ao começo/fim do arquivo no nano. Antes o
+	// modificador era ignorado e a seta saía pura. Ctrl+Delete ("\x1b[3;5~",
+	// "chopwordright" no nano, kill-word no readline ≥ 8.1) é um caso disto.
+	if c, ok := csiModificavel[keysym]; ok {
+		if p := parametroModificador(m); p > 1 {
+			return []byte(fmt.Sprintf("\x1b[%s;%d%c", c.n, p, c.final))
+		}
 	}
 	if s, ok := especiais[keysym]; ok {
 		if m.alt {
@@ -125,6 +173,22 @@ func bytesDaTecla(keysym uint32, m modificadores) []byte {
 	return b
 }
 
+// parametroModificador é o parâmetro de modificador do xterm: 1 sem
+// nenhum, somando 1 para Shift, 2 para Alt e 4 para Ctrl.
+func parametroModificador(m modificadores) int {
+	p := 1
+	if m.shift {
+		p++
+	}
+	if m.alt {
+		p += 2
+	}
+	if m.ctrl {
+		p += 4
+	}
+	return p
+}
+
 // runaDoKeysym converte um keysym X11 imprimível em rune. Latin-1 é
 // identidade; o resto usa a convenção Unicode do X (0x01000000 + ponto de
 // código).
@@ -151,4 +215,32 @@ func runaDoKeysym(keysym uint32) rune {
 		return '/'
 	}
 	return 0
+}
+
+// keysymDaRuna é o inverso de runaDoKeysym: Latin-1 é o próprio código, o
+// resto vai pela convenção Unicode do X (0x01000000 + ponto de código).
+// Zero para o que não é caractere imprimível. Quem usa é o texto que o
+// Windows já resolveu (HandleTexto, no VNC).
+func keysymDaRuna(r rune) uint32 {
+	switch {
+	case !unicode.IsPrint(r):
+		return 0
+	case r >= 0x20 && r <= 0x7e, r >= 0xa0 && r <= 0xff:
+		return uint32(r)
+	default:
+		return 0x01000000 + uint32(r)
+	}
+}
+
+// textoImprimivel tira do texto os caracteres de controle. O EditEvent só
+// traz o que o Windows já filtrou como imprimível, mas o texto vai direto
+// para um terminal remoto, e um ESC que escapasse viraria sequência de
+// comando do outro lado.
+func textoImprimivel(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsPrint(r) {
+			return r
+		}
+		return -1
+	}, s)
 }

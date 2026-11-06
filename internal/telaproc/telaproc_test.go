@@ -55,6 +55,12 @@ func filhoDeTeste(protocolo, endereco, token string) int {
 			_ = c.Enviar(EvtDesconectado, []byte(
 				string(rune('0'+x))+string(rune('0'+y))+
 					string(rune('0'+b))+map[bool]string{true: "P", false: "S"}[pressionado]))
+		case CmdTravas:
+			travas, ok := LerTravas(corpo)
+			if !ok {
+				return 6
+			}
+			_ = c.EnviarCursor(1000 + travas)
 		case CmdCredito:
 			// um quadro 2x1 no meio de uma tela 8x4
 			pix := []byte{1, 2, 3, 4, 5, 6, 7, 8}
@@ -106,6 +112,22 @@ func TestHandshakeEIdaEVolta(t *testing.T) {
 	}
 	if got := string(esperar(t, p, EvtDesconectado)); got != "123S" {
 		t.Fatalf("botão voltou %q, esperava %q", got, "123S")
+	}
+
+	if err := p.Travas(2 | 4); err != nil {
+		t.Fatalf("Travas: %v", err)
+	}
+	if cur, ok := LerCursor(esperar(t, p, EvtCursor)); !ok || cur != 1006 {
+		t.Fatalf("travas voltaram %d ok=%v, esperava 1006", cur, ok)
+	}
+}
+
+// CmdTravas veio depois dos eventos para não renumerar nada: um pai ainda
+// aberto pode lançar o filho de um binário já atualizado no disco.
+func TestNumeracaoDoProtocoloNaoMudou(t *testing.T) {
+	if CmdPonteiroMascara != 10 || EvtOla != 11 || EvtDisplayPronto != 19 || CmdTravas != 20 {
+		t.Fatalf("numeração mudou: CmdPonteiroMascara=%d EvtOla=%d EvtDisplayPronto=%d CmdTravas=%d",
+			CmdPonteiroMascara, EvtOla, EvtDisplayPronto, CmdTravas)
 	}
 }
 

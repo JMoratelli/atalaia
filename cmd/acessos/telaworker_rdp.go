@@ -347,6 +347,11 @@ func (wk *workerRDP) lacoComandos() {
 				wk.sess.KeyEvent(kc, pressionada)
 			}
 
+		case telaproc.CmdTravas:
+			if travas, ok := telaproc.LerTravas(corpo); ok {
+				wk.sess.SyncLocks(travas)
+			}
+
 		case telaproc.CmdClipboard:
 			wk.sess.SendClipboardText(string(corpo))
 

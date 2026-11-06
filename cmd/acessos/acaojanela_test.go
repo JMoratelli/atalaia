@@ -155,10 +155,11 @@ func TestAcoesConcorrentes(t *testing.T) {
 	drenando.Wait()
 }
 
-// esperarAte fica AQUI, e não em filateclas_linux_test.go, de propósito: este
-// arquivo não tem restrição de build, e o outro é linux-only. Com o helper lá,
-// o pacote de testes não compilava no Windows — justamente a plataforma do bug
-// que acaojanela.go corrige.
+// esperarAte fica AQUI, e não no teste da fila de teclas, de propósito: este
+// arquivo nunca teve restrição de build, e aquele foi linux-only até
+// 2026-11-06 (filateclas_linux_test.go). Com o helper lá, o pacote de testes
+// não compilava no Windows — justamente a plataforma do bug que acaojanela.go
+// corrige.
 func esperarAte(t *testing.T, cond func() bool) {
 	t.Helper()
 	limite := time.Now().Add(10 * time.Second)

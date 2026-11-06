@@ -69,6 +69,14 @@ func LerTecla(corpo []byte) (keycode uint32, pressionada, ok bool) {
 	return uint32(v[0]), corpo[4] != 0, true
 }
 
+func LerTravas(corpo []byte) (travas uint32, ok bool) {
+	v, ok := lerI32(corpo, 1)
+	if !ok {
+		return 0, false
+	}
+	return uint32(v[0]), true
+}
+
 func LerResize(corpo []byte) (w, h int, ok bool) {
 	v, ok := lerI32(corpo, 2)
 	if !ok {

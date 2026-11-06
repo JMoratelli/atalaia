@@ -47,6 +47,10 @@ typedef void (*cb_clip_oferta)(void *ctx, int fd_leitura);
 /* Estado atual dos modificadores: 1=Ctrl 2=Shift 4=Alt 8=Super. */
 int grab_modificadores(Grab *g);
 
+/* Travas: 1=Scroll 2=Num 4=Caps (bits do Synchronize Event do RDP), ou -1
+ * sem o foco do teclado. */
+int grab_travas(Grab *g);
+
 /* ctx e devolvido intacto em cada callback. Existe para o lado Go saber
  * QUAL captura disparou: sem ele os callbacks tinham de cair em variaveis
  * globais do pacote, e ai so cabia UMA janela com captura por processo —

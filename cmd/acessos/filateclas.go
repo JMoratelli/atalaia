@@ -1,5 +1,3 @@
-//go:build linux
-
 package main
 
 import (
@@ -10,6 +8,12 @@ import (
 )
 
 // Entrega de teclas às sessões remotas SEM bloquear quem chamou.
+//
+// Vale para as duas plataformas. Nasceu no Linux (a história abaixo), mas o
+// Windows tinha o mesmo defeito por outro caminho: lá a tecla é lida de
+// dentro do QUADRO (tratarTecladoFrame, em entrada_outros.go) e ia direto
+// em t.HandleKey — a mesma escrita bloqueante de até 5s, agora segurando o
+// desenho. Até 2026-11-06 este arquivo era filateclas_linux.go.
 //
 // ----------------------------------------------------------------------
 // POR QUE: o bug dos "botões que travam" (Linux)
@@ -57,11 +61,27 @@ import (
 // enfileirarTecla().
 
 // teclaPendente é uma tecla esperando a vez de ir pro socket.
+//
+// texto não vazio faz dela um TEXTO já resolvido pelo sistema (Windows, ver
+// teclado_outros.go), entregue por HandleTexto. Vai na mesma fila e não
+// numa à parte porque a ordem entre os dois importa: Shift apertado, "!",
+// Shift solto — o texto não pode passar na frente do modificador. Conta
+// como "apertou" para o descarte com a fila cheia (pressed = true): perder
+// um caractere é o mesmo custo de perder um "apertou".
+//
+// ehTravas faz dela o ESTADO das travas (Num/Caps/Scroll Lock), entregue
+// por HandleTravas — ver travas.go, que explica por que precisa da mesma
+// fila. Conta como "soltou" (pressed = false): é estado, e perdê-lo deixa
+// a sessão trocada do mesmo jeito que um "soltou" perdido deixa a tecla
+// presa.
 type teclaPendente struct {
-	t       Tab
-	keysym  uint32
-	keycode uint32
-	pressed bool
+	t        Tab
+	keysym   uint32
+	keycode  uint32
+	pressed  bool
+	texto    string
+	ehTravas bool
+	travas   uint32
 }
 
 // filaTeclas é a fila de entrega. É struct, e não um punhado de variáveis
@@ -125,8 +145,26 @@ func novaFilaTeclas(capacidade int) *filaTeclas {
 //     presa — o mesmo defeito que a lista tentava evitar. Reproduzido em teste
 //     (ver TestReleaseNaoUltrapassaPress).
 func (f *filaTeclas) enfileirar(t Tab, keysym, keycode uint32, pressed bool) {
-	k := teclaPendente{t: t, keysym: keysym, keycode: keycode, pressed: pressed}
+	f.por(teclaPendente{t: t, keysym: keysym, keycode: keycode, pressed: pressed})
+}
 
+// enfileirarTexto põe na fila um texto para HandleTexto — ver o campo texto
+// de teclaPendente.
+func (f *filaTeclas) enfileirarTexto(t Tab, texto string) {
+	if texto == "" {
+		return
+	}
+	f.por(teclaPendente{t: t, pressed: true, texto: texto})
+}
+
+// enfileirarTravas põe na fila o estado das travas para HandleTravas — ver
+// o campo ehTravas de teclaPendente.
+func (f *filaTeclas) enfileirarTravas(t Tab, travas uint32) {
+	f.por(teclaPendente{t: t, ehTravas: true, travas: travas})
+}
+
+func (f *filaTeclas) por(k teclaPendente) {
+	pressed := k.pressed
 	f.mu.Lock()
 	if len(f.fila) >= f.teto {
 		if i := f.indicePrimeiroPress(); i >= 0 {
@@ -190,6 +228,18 @@ func (f *filaTeclas) rodar() {
 
 			// FORA da trava: HandleKey pode bloquear por segundos, e quem
 			// enfileira não pode ficar preso esperando por isso.
+			if k.texto != "" {
+				if rt, ok := k.t.(receptorTexto); ok {
+					rt.HandleTexto(k.texto)
+				}
+				continue
+			}
+			if k.ehTravas {
+				if st, ok := k.t.(sincronizaTravas); ok {
+					st.HandleTravas(k.travas)
+				}
+				continue
+			}
 			k.t.HandleKey(k.keysym, k.keycode, k.pressed)
 		}
 	}
@@ -201,10 +251,23 @@ var teclas = novaFilaTeclas(capacidadeFilaTeclas)
 var umaVezFilaTeclas sync.Once
 
 // iniciarFilaTeclas sobe a goroutine de escrita. Idempotente — chamada junto
-// com o grab (ver entrada_linux.go), que também só arma uma vez.
+// com o grab no Linux (ver entrada_linux.go), que também só arma uma vez, e
+// a cada quadro no Windows (entrada_outros.go).
 func iniciarFilaTeclas() { umaVezFilaTeclas.Do(func() { go teclas.rodar() }) }
 
 // enfileirarTecla é o que o callback do grab chama. Ver filaTeclas.enfileirar.
 func enfileirarTecla(t Tab, keysym, keycode uint32, pressed bool) {
 	teclas.enfileirar(t, keysym, keycode, pressed)
+}
+
+// enfileirarTexto é o par de enfileirarTecla para o texto que o Windows já
+// resolveu. Ver filaTeclas.enfileirarTexto.
+func enfileirarTexto(t Tab, texto string) {
+	teclas.enfileirarTexto(t, texto)
+}
+
+// enfileirarTravas manda o estado das travas pela fila de produção. Ver
+// travas.go.
+func enfileirarTravas(t Tab, travas uint32) {
+	teclas.enfileirarTravas(t, travas)
 }

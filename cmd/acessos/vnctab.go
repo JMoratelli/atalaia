@@ -491,6 +491,29 @@ func (t *vncTab) HandleKey(keysym, _ uint32, pressed bool) {
 	}
 }
 
+// HandleTexto manda o caractere já resolvido pelo sistema (no Windows, o
+// WM_CHAR — ver teclado_outros.go) como keysym, apertando e soltando. O
+// servidor VNC acha sozinho a tecla que produz aquele keysym no layout
+// dele; mandar o keysym da tecla física, como antes, era assumir teclado
+// US e perder o Shift dos símbolos.
+func (t *vncTab) HandleTexto(s string) {
+	if t.ronly.Load() {
+		return
+	}
+	p := t.proc.Load()
+	if p == nil {
+		return
+	}
+	for _, r := range s {
+		ks := keysymDaRuna(r)
+		if ks == 0 {
+			continue
+		}
+		_ = p.Tecla(ks, true)
+		_ = p.Tecla(ks, false)
+	}
+}
+
 // ------------------------------------------------ barra de sessão
 
 func (t *vncTab) EstadoSessao() estadoSessao {

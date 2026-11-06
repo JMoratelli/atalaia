@@ -340,6 +340,16 @@ func (s *Session) KeyEvent(keycodeX11 uint32, down bool) {
 	C.rs_tecla(s.s, C.uint32_t(keycodeX11), pressed)
 }
 
+// SyncLocks manda ao servidor o estado das travas do teclado local (bits
+// KBD_SYNC_*: 1=Scroll Lock, 2=Num Lock, 4=Caps Lock) e o guarda para
+// reafirmar se o servidor mudar sozinho — ver rs_travas no rdpshim.c.
+// Antes de conectar, só guarda.
+func (s *Session) SyncLocks(travas uint32) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	C.rs_travas(s.s, C.uint32_t(travas))
+}
+
 // Close libera a sessão. Não chame Run/eventos depois disso.
 func (s *Session) Close() {
 	registro.Remover(s.handle)

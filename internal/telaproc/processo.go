@@ -340,6 +340,12 @@ func (p *Processo) Tecla(tecla uint32, pressionada bool) error {
 	return p.Enviar(CmdTecla, append(i32(int(tecla)), bool1(pressionada)))
 }
 
+// Travas manda o estado das travas do teclado local (ver CmdTravas). Só o
+// RDP usa; o filho VNC ignora o comando.
+func (p *Processo) Travas(travas uint32) error {
+	return p.Enviar(CmdTravas, i32(int(int32(travas))))
+}
+
 // PonteiroMascara manda posição e ESTADO DE TODOS os botões de uma vez
 // (bit 0 esquerdo, bit 1 meio, bit 2 direito), que é como o VNC fala.
 func (p *Processo) PonteiroMascara(x, y, mascara int) error {

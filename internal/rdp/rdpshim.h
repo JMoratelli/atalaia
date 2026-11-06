@@ -80,6 +80,9 @@ void rs_ponteiro_mover(Sessao *s, int x, int y);
 void rs_ponteiro_botao(Sessao *s, int x, int y, int botao, int pressionado);
 void rs_ponteiro_roda(Sessao *s, int eixo, int passos);
 void rs_tecla(Sessao *s, uint32_t keycode_x11, int pressionada);
+/* estado das travas do teclado local, bits KBD_SYNC_* (1=Scroll 2=Num
+ * 4=Caps); manda o Synchronize Event ao servidor. Ver rdpshim.c. */
+void rs_travas(Sessao *s, uint32_t travas);
 
 void rs_destruir(Sessao *s);
 

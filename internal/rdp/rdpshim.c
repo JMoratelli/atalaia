@@ -249,7 +249,27 @@ typedef struct {
      * aqui criaria duas ordens de aquisicao diferentes entre threads, que
      * e a receita do abraco mortal. Aqui nunca se aninha um no outro. */
     rdpshim_mutex_t canais_lock;
+
+    /* TRAVAS DO TECLADO (Num/Caps/Scroll Lock) — ver rs_travas.
+     *
+     * travas_local e a ultima mascara KBD_SYNC_* que o app mandou, ou seja,
+     * o estado do teclado da maquina do operador; tem_travas fica 0 ate a
+     * primeira chegar. reafirmar/reafirmou sao o "o servidor mudou sozinho"
+     * de hook_indicadores.
+     *
+     * travas_lock protege os quatro E serializa os dois pontos que mandam o
+     * sync — rs_travas, na goroutine de comandos, e reafirmar_travas, na
+     * thread da sessao —, para o ultimo a sair ser sempre o mais novo.
+     * Nunca e tomada junto com outra trava. */
+    rdpshim_mutex_t travas_lock;
+    int tem_travas;
+    int reafirmar;
+    int reafirmou;
+    uint32_t travas_local;
 } Sessao;
+
+/* as travas que o app sincroniza; Kana fica de fora (teclado japones) */
+#define TRAVAS_SYNC (KBD_SYNC_SCROLL_LOCK | KBD_SYNC_NUM_LOCK | KBD_SYNC_CAPS_LOCK)
 
 static Sessao *sessao_de(freerdp *inst) {
     RdpCtx *rc = (RdpCtx *)inst->context;
@@ -826,12 +846,58 @@ static BOOL hook_pre_connect(freerdp *inst) {
     return TRUE;
 }
 
+/* O servidor avisa (Set Keyboard Indicators PDU) quando as travas DELE
+ * mudam. A mudanca que importa aqui e a que ele faz SOZINHO: o Windows
+ * remoto aplica o Num Lock do perfil do usuario ao terminar o logon —
+ * depois do sync da conexao —, e a sessao voltava a ficar trocada em
+ * relacao ao teclado do operador.
+ *
+ * Quando o que ele anuncia nao bate com o estado local, o sync e
+ * reenviado UMA vez. O envio sai em reafirmar_travas, depois do
+ * processamento, e nao daqui de dentro do callback de recebimento. Uma vez
+ * so, de proposito: ha programa de PDV que FORCA o Num Lock ligado, e
+ * reafirmar sempre viraria cabo de guerra com ele, a luz piscando sem
+ * parar. Na segunda divergencia vale o servidor, ate o operador mexer numa
+ * trava ou devolver o foco para a sessao, o que manda o estado local de
+ * novo (rs_travas).
+ *
+ * Nao mexe no teclado LOCAL, que e o que o xfreerdp faz: aqui seria
+ * injetar Num Lock no sistema (e o app receberia a propria tecla de
+ * volta), e no Wayland nem ha como. */
+static BOOL hook_indicadores(rdpContext *context, UINT16 led_flags) {
+    Sessao *s = sessao_de(context->instance);
+    if (!s) return TRUE;
+    MUTEX_LOCK(&s->travas_lock);
+    if (s->tem_travas && !s->reafirmou &&
+        ((uint32_t)led_flags & TRAVAS_SYNC) != s->travas_local) {
+        s->reafirmou = 1;
+        s->reafirmar = 1;
+    }
+    MUTEX_UNLOCK(&s->travas_lock);
+    if (getenv("RS_LOG"))
+        fprintf(stderr, "[rdp] travas do servidor: 0x%x\n", (unsigned)led_flags);
+    return TRUE;
+}
+
+/* Manda o reenvio que hook_indicadores pediu. Roda na thread da sessao,
+ * logo depois de freerdp_check_event_handles. */
+static void reafirmar_travas(Sessao *s) {
+    MUTEX_LOCK(&s->travas_lock);
+    if (s->reafirmar && s->conectado) {
+        s->reafirmar = 0;
+        freerdp_input_send_synchronize_event(s->inst->context->input,
+                                             s->travas_local);
+    }
+    MUTEX_UNLOCK(&s->travas_lock);
+}
+
 static BOOL hook_post_connect(freerdp *inst) {
     rdpContext *context = inst->context;
     if (!gdi_init(inst, PIXEL_FORMAT_BGRX32)) return FALSE;
     context->update->BeginPaint = hook_begin_paint;
     context->update->EndPaint = hook_end_paint;
     context->update->DesktopResize = hook_desktop_resize;
+    context->update->SetKeyboardIndicators = hook_indicadores;
 
     rdpPointer funcoesPonteiro = { 0 };
     funcoesPonteiro.size = sizeof(MeuPonteiro);
@@ -879,6 +945,7 @@ Sessao *rs_criar(void *pyctx,
     MUTEX_INIT(&s->clip_lock);
     MUTEX_INIT(&s->canais_lock);
     MUTEX_INIT(&s->fb_lock);
+    MUTEX_INIT(&s->travas_lock);
 
     /* Registra o provedor de addins ESTATICOS (compilados dentro da propria
      * freerdp-client3), para o hook_load_channels achar cliprdr/rdpdr/disp
@@ -895,6 +962,7 @@ Sessao *rs_criar(void *pyctx,
         MUTEX_DESTROY(&s->clip_lock);
         MUTEX_DESTROY(&s->canais_lock);
         MUTEX_DESTROY(&s->fb_lock);
+        MUTEX_DESTROY(&s->travas_lock);
         free(s);
         return NULL;
     }
@@ -915,6 +983,7 @@ Sessao *rs_criar(void *pyctx,
         MUTEX_DESTROY(&s->clip_lock);
         MUTEX_DESTROY(&s->canais_lock);
         MUTEX_DESTROY(&s->fb_lock);
+        MUTEX_DESTROY(&s->travas_lock);
         free(s);
         return NULL;
     }
@@ -1219,6 +1288,7 @@ int rs_processar(Sessao *s) {
         s->conectado = 0;
         return 0;
     }
+    reafirmar_travas(s);
     return 1;
 }
 
@@ -1363,6 +1433,33 @@ void rs_tecla(Sessao *s, uint32_t keycode_x11, int pressionada) {
                                          scancode);
 }
 
+/* TRAVAS: Num Lock, Caps Lock e Scroll Lock (bits KBD_SYNC_*).
+ *
+ * O RDP manda a tecla por POSICAO (scancode), e quem decide se o "1" do
+ * numerico e "1" ou "End" e o Num Lock DO SERVIDOR. Sem ninguem
+ * sincronizar, o servidor ficava com o estado dele (o da tela de logon, o
+ * do perfil) e o teclado do operador com outro: a luz acesa e o numerico
+ * andando o cursor. Apertar Num Lock invertia os dois juntos, e eles
+ * continuavam trocados.
+ *
+ * O protocolo tem a peca para isso, o Synchronize Event (TS_SYNC_EVENT),
+ * que DIZ ao servidor o estado das travas — e o que o mstsc e o wfreerdp
+ * mandam ao ganhar o foco. O app chama rs_travas com o estado local ao
+ * conectar, ao devolver o foco para a sessao e sempre que ele muda (ver
+ * cmd/acessos/travas.go). O valor fica guardado para hook_indicadores. */
+void rs_travas(Sessao *s, uint32_t travas) {
+    if (!s) return;
+    MUTEX_LOCK(&s->travas_lock);
+    s->travas_local = travas & TRAVAS_SYNC;
+    s->tem_travas = 1;
+    s->reafirmar = 0;   /* o envio abaixo ja e o mais novo */
+    s->reafirmou = 0;   /* estado novo do operador: cabe reafirmar de novo */
+    if (s->inst && s->conectado)
+        freerdp_input_send_synchronize_event(s->inst->context->input,
+                                             s->travas_local);
+    MUTEX_UNLOCK(&s->travas_lock);
+}
+
 void rs_destruir(Sessao *s) {
     if (!s) return;
     if (s->inst) {
@@ -1398,5 +1495,6 @@ void rs_destruir(Sessao *s) {
     MUTEX_DESTROY(&s->clip_lock);
     MUTEX_DESTROY(&s->canais_lock);
     MUTEX_DESTROY(&s->fb_lock);
+    MUTEX_DESTROY(&s->travas_lock);
     free(s);
 }

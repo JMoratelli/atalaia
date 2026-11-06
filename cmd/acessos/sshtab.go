@@ -587,20 +587,34 @@ func (t *sshTab) HandleKey(keysym, _ uint32, pressed bool) {
 			return
 		}
 	}
-	// Digitar volta pro fundo da tela: é o que todo terminal faz quando o
-	// operador estava lendo o histórico e retoma o comando — sem isto o
-	// que se digita ia aparecer "atrás" da rolagem, fora de vista.
+	t.digitou()
+	t.enviar(bytesDaTecla(keysym, t.mods))
+}
+
+// HandleTexto recebe o caractere já resolvido pelo sistema (no Windows, o
+// WM_CHAR — ver teclado_outros.go): Shift, layout ABNT2, acento e AltGr
+// já vêm aplicados, e o texto vai como está.
+func (t *sshTab) HandleTexto(s string) {
+	s = textoImprimivel(s)
+	if s == "" {
+		return
+	}
+	t.digitou()
+	t.enviar([]byte(s))
+}
+
+// digitou leva a tela de volta ao fundo: é o que todo terminal faz quando
+// o operador estava lendo o histórico e retoma o comando — sem isto o que
+// se digita ia aparecer "atrás" da rolagem, fora de vista.
+func (t *sshTab) digitou() {
 	t.mu.Lock()
 	rolava := t.rolagem != 0
 	t.rolagem = 0
+	t.ultimaTecla = time.Now()
 	t.mu.Unlock()
 	if rolava {
 		t.invalidar()
 	}
-	t.mu.Lock()
-	t.ultimaTecla = time.Now()
-	t.mu.Unlock()
-	t.enviar(bytesDaTecla(keysym, t.mods))
 }
 
 // copiarSelecao copia o trecho marcado com o mouse. Sem seleção, copia a

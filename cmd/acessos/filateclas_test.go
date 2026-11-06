@@ -1,8 +1,7 @@
-//go:build linux
-
 package main
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,14 +12,13 @@ import (
 //
 //	go test ./cmd/acessos/ -run 'Tecla|Ordem|Release' -race -count=3
 //
-// O que eles protegem está escrito por extenso em filateclas_linux.go. Em
-// uma linha: o callback do grab roda na goroutine que despacha o Wayland
-// (a mesma do laço de eventos), então escrever no socket de lá congela a
-// interface inteira.
+// O que eles protegem está escrito por extenso em filateclas.go. Em uma
+// linha: quem recebe a tecla roda na goroutine do laço de eventos (o
+// callback do grab no Linux, o quadro no Windows), então escrever no
+// socket de lá congela a interface inteira.
 //
-// esperarAte vive em acaojanela_test.go, que NÃO tem restrição de build —
-// assim o pacote de testes continua compilando no Windows, onde este
-// arquivo aqui não entra.
+// esperarAte vive em acaojanela_test.go. Este arquivo era só do Linux até
+// a fila passar a valer também no Windows (2026-11-06).
 
 // abaLenta é uma aba cujo HandleKey demora — simula o worker engasgado, que
 // é o estado em que o bug aparecia.
@@ -217,4 +215,114 @@ func TestTeclasDeVariasThreads(t *testing.T) {
 		}(th)
 	}
 	wg.Wait()
+}
+
+// abaTextoFila grava teclas e textos na ordem em que a fila os entrega.
+type abaTextoFila struct {
+	abaDeTeste
+	mu  sync.Mutex
+	log []string
+	fim chan struct{}
+}
+
+func (a *abaTextoFila) HandleKey(ks, kc uint32, p bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if p {
+		a.log = append(a.log, "aperta")
+	} else {
+		a.log = append(a.log, "solta")
+	}
+}
+
+func (a *abaTextoFila) HandleTexto(s string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.log = append(a.log, s)
+	if s == "fim" {
+		close(a.fim)
+	}
+}
+
+// HandleTravas grava o estado das travas na mesma linha do tempo.
+func (a *abaTextoFila) ConexaoTravas() any { return a }
+
+func (a *abaTextoFila) HandleTravas(travas uint32) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.log = append(a.log, fmt.Sprintf("travas=%d", travas))
+}
+
+// O estado das travas vai DEPOIS do Num Lock que acabou de ir como tecla:
+// na ordem inversa, o servidor ficaria com o estado novo e em seguida a
+// tecla o inverteria de volta.
+func TestTravasNaOrdemDasTeclas(t *testing.T) {
+	f := novaFilaTeclas(64)
+	go f.rodar()
+	aba := &abaTextoFila{fim: make(chan struct{})}
+
+	f.enfileirar(aba, 0xff7f, 77, true)
+	f.enfileirarTravas(aba, travaNum)
+	f.enfileirar(aba, 0xff7f, 77, false)
+	f.enfileirarTexto(aba, "fim")
+
+	select {
+	case <-aba.fim:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a fila não entregou")
+	}
+	aba.mu.Lock()
+	defer aba.mu.Unlock()
+	quer := []string{"aperta", "travas=2", "solta", "fim"}
+	if fmt.Sprint(aba.log) != fmt.Sprint(quer) {
+		t.Fatalf("entregue %q, queria %q", aba.log, quer)
+	}
+}
+
+// Com a fila estourada, o estado das travas não cai: é estado, e perdê-lo
+// deixa a sessão trocada como um "soltou" perdido deixa a tecla presa.
+func TestTravasNaoCaemComFilaCheia(t *testing.T) {
+	f := novaFilaTeclas(2) // sem goroutine de escrita: nada sai
+	aba := &abaTextoFila{}
+	f.enfileirarTravas(aba, travaNum)
+	for i := 0; i < 10; i++ {
+		f.enfileirar(aba, uint32(i), uint32(i), true)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.fila) == 0 || !f.fila[0].ehTravas {
+		t.Fatalf("o estado das travas foi descartado; fila: %+v", f.fila)
+	}
+}
+
+// O texto vai na MESMA fila das teclas, e na ordem: Shift apertado, "!",
+// Shift solto. Se o texto passasse na frente do Shift, o VNC receberia o
+// "!" com o Shift ainda solto do lado de lá.
+func TestTextoNaOrdemDasTeclas(t *testing.T) {
+	f := novaFilaTeclas(64)
+	go f.rodar()
+	aba := &abaTextoFila{fim: make(chan struct{})}
+
+	f.enfileirar(aba, 0xffe1, 50, true)
+	f.enfileirarTexto(aba, "!")
+	f.enfileirar(aba, 0xffe1, 50, false)
+	f.enfileirarTexto(aba, "")
+	f.enfileirarTexto(aba, "fim")
+
+	select {
+	case <-aba.fim:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a fila não entregou")
+	}
+	aba.mu.Lock()
+	defer aba.mu.Unlock()
+	quer := []string{"aperta", "!", "solta", "fim"}
+	if len(aba.log) != len(quer) {
+		t.Fatalf("entregue %q, queria %q", aba.log, quer)
+	}
+	for i := range quer {
+		if aba.log[i] != quer[i] {
+			t.Fatalf("entregue %q, queria %q", aba.log, quer)
+		}
+	}
 }

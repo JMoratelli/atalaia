@@ -9,6 +9,7 @@ import (
 
 	"gioui.org/app"
 	"gioui.org/io/event"
+	"gioui.org/io/key"
 	"gioui.org/layout"
 )
 
@@ -124,7 +125,7 @@ func tratarEventoPlataforma(est *estadoJanela, w *app.Window, e event.Event, act
 				// a fila default de propósito. HandleKey escreve no
 				// socket do processo-filho com bloqueio de até 5s, ou
 				// seja, daqui ele congela a interface inteira. O porquê
-				// completo está em filateclas_linux.go.
+				// completo está em filateclas.go.
 				enfileirarTecla(t, keysym, keycodeX11, pressed)
 			},
 			func(text string) {
@@ -164,9 +165,39 @@ func tratarEventoPlataforma(est *estadoJanela, w *app.Window, e event.Event, act
 
 }
 
-// tratarTecladoFrame não faz nada no Linux: o teclado já chega inteiro pelo
-// grab acima, direto do Wayland — ver tratarEventoPlataforma.
-func tratarTecladoFrame(w *app.Window, gtx layout.Context, activeTab func() Tab) {}
+// tratarTecladoFrame, no Linux, só sincroniza as travas (Num/Caps/Scroll
+// Lock) com a sessão — ver travas.go. As teclas já chegam inteiras pelo
+// grab acima, direto do Wayland (tratarEventoPlataforma).
+//
+// A aba só fica com o teclado nas mesmas condições em que o grab entrega
+// teclas a ela, e só com a janela tendo o foco do teclado: sem ele o grab
+// não tem estado a ler (ok = false), e a volta do foco manda de novo.
+func tratarTecladoFrame(est *estadoJanela, gtx layout.Context, activeTab func() Tab) {
+	var alvo Tab
+	travas, comFoco := est.grab.Load().Travas()
+	if comFoco && !temDialogo() && !focoEmCampo.Load() {
+		if t := activeTab(); t != nil && querTeclado(t) {
+			alvo = t
+		}
+	}
+	est.teclado.sinc.atualizar(alvo, func() uint32 { return travas }, enfileirarTravas)
+}
+
+// estadoTeclado guarda, por janela, só o que já foi mandado de travas. O
+// roteador de teclas de verdade é o do Windows (entrada_outros.go); aqui o
+// grab entrega cada tecla já com apertar e soltar, e o teclado_leave do
+// grab_wayland.c solta o que estava segurado quando a janela perde o foco.
+type estadoTeclado struct {
+	sinc sincTravas
+}
+
+// devolverTecladoASessao é o que o clique na área de uma sessão remota
+// chama (conteudoaba.go). Aqui basta tirar o foco do Gio de qualquer campo:
+// sem campo focado, focoEmCampo cai no quadro seguinte e o grab volta a
+// entregar as teclas à sessão.
+func devolverTecladoASessao(gtx layout.Context) {
+	gtx.Execute(key.FocusCmd{Tag: nil})
+}
 
 // tratarClipboardFrame só entrega o que já estava enfileirado — ver
 // clipboard.go. Fora do Linux (entrada_outros.go) é diferente: lá não há

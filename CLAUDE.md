@@ -65,6 +65,32 @@
     `cmd/telacheia` mede as quatro transições numa janela de verdade —
     sai 1 se alguma regredir. Nada disso aparece em `go test`: não há
     HWND, nem monitor, nem barra de tarefas.
+  - **O `key.Name` do Windows é a TECLA, não o caractere** (achado em
+    2026-11-06, com reclamação de "Shift não funciona"). O Gio manda o
+    mesmo `"1"` com e sem Shift, e o app montava o caractere do SSH/VNC
+    por uma tabela de teclado US: Shift+1 saía `1`, `:` saía `;`, `|`
+    saía `\`, e no ABNT2 o `ç` e os acentos não saíam. Hoje SSH e VNC
+    pegam o caractere do `WM_CHAR` (`key.EditEvent`, já com layout,
+    Shift, AltGr e tecla morta) e o RDP manda a POSIÇÃO pelo scancode
+    (`key.Event.Scancode`, patch no fork) — ver o cabeçalho de
+    `cmd/acessos/teclado_outros.go`. Cuidado ao mexer: no Gio, Enter,
+    Esc, setas e Backspace também têm nome de UMA rune (`"⏎"`, `"←"`),
+    então "nome de um caractere" não quer dizer "tecla de texto".
+    `cmd/tecladotest` digita por `SendInput` numa janela de verdade e
+    confere o que chega (só digita com a janela dela em primeiro plano);
+    rodar com `C:\msys64\ucrt64\bin` no PATH não é preciso para ele, mas
+    é para o `acessos.exe` nativo — sem as DLLs o Windows abre uma caixa
+    de "DLL não encontrada" POR DLL e segura o processo sem janela.
+  - **Num Lock/Caps Lock da sessão RDP seguem o teclado local** pelo
+    Synchronize Event (`rs_travas`, em `internal/rdp/rdpshim.c`; quando
+    mandar, em `cmd/acessos/travas.go`). Duas armadilhas achadas
+    fazendo isso: o `GetKeyState` é POR THREAD, então no Windows a
+    leitura vai para a thread da janela por `w.Run` (lida da goroutine
+    do quadro, sairia velha); e o Num Lock tem o mesmo scancode 0x45 do
+    Pause — o teclado físico o marca como estendido e o `SendInput`
+    não, por isso o fork decide os dois pela tecla virtual. O
+    `cmd/tecladotest` cobre os dois casos e devolve o Num Lock como
+    estava.
   - **`gofmt -l` aqui acusa o repositório inteiro** porque o working tree
     é CRLF (`core.autocrlf=true`) e o gofmt normaliza para LF. NÃO rodar
     `gofmt -w` no repositório: reescreve todos os arquivos. Para conferir

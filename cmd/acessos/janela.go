@@ -46,6 +46,11 @@ type estadoJanela struct {
 	// refazer o pedido a cada quadro. Só o laço de quadro desta janela
 	// mexe nele, daí não precisar ser atômico.
 	inibicaoLigada bool
+
+	// teclado é o roteador de teclas do Windows desta janela: o que está
+	// apertado do lado remoto, para soltar quando a janela perde o foco
+	// (ver entrada_outros.go). Vazio no Linux, onde o grab cuida disso.
+	teclado estadoTeclado
 }
 
 func novoEstadoJanela(w *app.Window) *estadoJanela {

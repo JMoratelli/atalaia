@@ -333,3 +333,23 @@ Dois patches de vidro fosco (2026-10-18):
   Os campos novos ficam no FIM das structs de propósito, para o gofmt
   não realinhar os campos de origem e o diff contra o upstream continuar
   só de acréscimos.
+
+Um patch de teclado no Windows (2026-11-06):
+
+- **Scancode no `key.Event`** — campo novo `Scancode uint32` no fim de
+  `key.Event` (`io/key/key.go`), preenchido só em `app/os_windows.go`
+  (`scancodeDoLParam`: bits 16-23 do `lParam`, mais 0xE000 quando o bit
+  24 marca tecla estendida). No mesmo `case WM_KEYDOWN...` a tecla que o
+  `convertKeyCode` não nomeia passa a sair também, com `Name` vazio e o
+  scancode — antes ela simplesmente não existia para o app. Motivo: a
+  sessão RDP repassa a tecla por POSIÇÃO, e o `Name` não basta para
+  isso — o "+" do numérico e o "=" viram o mesmo "+", o "\" e a tecla
+  ao lado do Z (VK_OEM_102) o mesmo "\", e CapsLock, Insert, NumLock,
+  Menu e a "/?" do ABNT2 (VK_ABNT_C1) não têm nome. Quem usa:
+  `cmd/acessos/teclado_outros.go` (`keycodeX11DoScancode`). Filtro com
+  `Name` preenchido não casa com `Name` vazio, então nenhum widget do Gio
+  vê essas teclas novas; só quem filtra por nome vazio (a captura da
+  sessão, em `cmd/acessos/entrada_outros.go`). Num Lock e Pause saem pela
+  tecla virtual (0xE045 e 0x45), não pelo `lParam`: os dois têm o
+  scancode 0x45, e o SendInput não põe no Num Lock a marca de estendida
+  que o teclado físico põe — pelo `lParam`, ele virava Pause.

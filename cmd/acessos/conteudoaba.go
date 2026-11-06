@@ -48,6 +48,12 @@ func rotearPonteiroEDesenhar(gtx layout.Context, t Tab, tag event.Tag,
 			break
 		}
 		if pe, ok := ev.(pointer.Event); ok && t != nil {
+			// Clicar na sessão devolve o teclado a ela: sem isto, depois de
+			// usar a busca da lateral o que se digitava continuava indo
+			// para o campo, mesmo com o clique já dentro da máquina remota.
+			if pe.Kind == pointer.Press && querTeclado(t) {
+				devolverTecladoASessao(gtx)
+			}
 			t.HandlePointer(pe, size)
 		}
 	}

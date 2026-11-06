@@ -618,6 +618,22 @@ func (t *rdpTab) HandleKey(_, keycodeX11 uint32, pressed bool) {
 	}
 }
 
+// ConexaoTravas e HandleTravas: Num/Caps/Scroll Lock iguais aos desta
+// máquina — ver travas.go. A conexão é o processo-filho, que é um por
+// conexão: religou, é outro.
+func (t *rdpTab) ConexaoTravas() any {
+	if p := t.proc.Load(); p != nil {
+		return p
+	}
+	return nil
+}
+
+func (t *rdpTab) HandleTravas(travas uint32) {
+	if p := t.proc.Load(); p != nil {
+		_ = p.Travas(travas)
+	}
+}
+
 // ------------------------------------------------ barra de sessão
 
 func (t *rdpTab) EstadoSessao() estadoSessao {

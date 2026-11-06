@@ -297,11 +297,17 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		// Avoid flickering between GPU content and background color.
 		return windows.TRUE
 	case windows.WM_KEYDOWN, windows.WM_KEYUP, windows.WM_SYSKEYDOWN, windows.WM_SYSKEYUP:
-		if n, ok := convertKeyCode(wParam); ok {
+		// patch acessos: a tecla sem nome no Gio (CapsLock, Insert, a
+		// "/?" do ABNT2...) também sai, com Name vazio e o Scancode — ver
+		// key.Event.Scancode.
+		n, ok := convertKeyCode(wParam)
+		sc := scancodeDoLParam(wParam, lParam)
+		if ok || sc != 0 {
 			e := key.Event{
 				Name:      n,
 				Modifiers: getModifiers(),
 				State:     key.Press,
+				Scancode:  sc,
 			}
 			if msg == windows.WM_KEYUP || msg == windows.WM_SYSKEYUP {
 				e.State = key.Release
@@ -565,6 +571,34 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 	}
 
 	return windows.DefWindowProc(hwnd, msg, wParam, lParam)
+}
+
+// patch acessos: scancodeDoLParam tira do lParam de WM_KEYDOWN/WM_KEYUP o
+// código físico da tecla — bits 16-23 — e marca a tecla estendida (bit 24)
+// somando 0xE000, a convenção de escrita usual (0xE01D é o Ctrl direito).
+// Ver key.Event.Scancode.
+//
+// Num Lock e Pause saem pela tecla virtual, e não pelo lParam: os dois têm
+// o scancode 0x45, e o que os separa é a marca de estendida — que o
+// teclado físico põe no Num Lock, mas o SendInput (e o teclado virtual que
+// o usa) não põe. Pelo lParam, um Num Lock assim virava Pause do lado
+// remoto (achado com o cmd/tecladotest, 2026-11-06).
+func scancodeDoLParam(wParam, lParam uintptr) uint32 {
+	const vkPause, vkNumLock = 0x13, 0x90
+	switch wParam {
+	case vkNumLock:
+		return 0xe045
+	case vkPause:
+		return 0x45
+	}
+	sc := uint32(lParam>>16) & 0xff
+	if sc == 0 {
+		return 0
+	}
+	if lParam&(1<<24) != 0 {
+		sc |= 0xe000
+	}
+	return sc
 }
 
 // getModifiers reports the currently pressed modifier keys.

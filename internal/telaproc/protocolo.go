@@ -76,6 +76,15 @@ const (
 	EvtCursor        // pointer.Cursor já classificado (uint32)
 	EvtCertPedido    // JSON Certificado
 	EvtDisplayPronto // vazio
+
+	// CmdTravas manda o estado de Num Lock, Caps Lock e Scroll Lock DESTA
+	// máquina (uint32 com os bits do TS_SYNC_EVENT do RDP: 1=Scroll,
+	// 2=Num, 4=Caps), para o servidor ficar igual — ver
+	// cmd/acessos/travas.go. Fica no fim, depois dos eventos, para não
+	// renumerar nada do que já existia: pai e filho são o mesmo binário,
+	// mas um pai ainda aberto pode lançar o filho de um binário já
+	// atualizado no disco.
+	CmdTravas
 )
 
 // Ligacao são os parâmetros de conexão (CmdConectar). Dominio só o RDP

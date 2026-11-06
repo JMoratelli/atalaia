@@ -157,6 +157,29 @@ func (h *Handle) Modificadores() int {
 	return int(C.grab_modificadores(h.g))
 }
 
+// Travas devolve Num/Caps/Scroll Lock como máscara (1=Scroll, 2=Num,
+// 4=Caps — os bits do Synchronize Event do RDP), e ok=false quando a
+// janela está sem o foco do teclado: aí não há estado a ler.
+//
+// Como Modificadores, vem do wl_keyboard.modifiers do compositor (as
+// travas são os modificadores "locked"). Leia do laço de quadro: o xkb_state
+// é mexido pelo dispatch, que neste backend roda na mesma goroutine.
+func (h *Handle) Travas() (travas uint32, ok bool) {
+	if h == nil {
+		return 0, false
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if h.g == nil {
+		return 0, false
+	}
+	t := int(C.grab_travas(h.g))
+	if t < 0 {
+		return 0, false
+	}
+	return uint32(t), true
+}
+
 // Inibir liga ou desliga a captura dos atalhos do compositor (Alt+Tab e
 // afins). Nasce DESLIGADA: só deve ficar ligada enquanto a aba em foco
 // for uma sessão remota — com ela ligada no painel, o usuário perde os

@@ -107,6 +107,14 @@ type Event struct {
 	Modifiers Modifiers
 	// State is the state of the key when the event was fired.
 	State State
+	// patch acessos: Scancode é o código FÍSICO da tecla (conjunto 1 do
+	// PC, com 0xE000 somado quando a tecla é estendida), hoje preenchido
+	// só no Windows. Quem repassa a tecla para uma máquina remota por
+	// posição (RDP) precisa dele: Name colapsa teclas diferentes no mesmo
+	// nome ("+" do numérico e "=", "\" e a tecla ao lado do Z) e deixa
+	// teclas de fora (CapsLock, Insert, a "/?" do ABNT2). Zero quando a
+	// plataforma não informa.
+	Scancode uint32
 }
 
 // An EditEvent requests an edit by an input method.

@@ -116,6 +116,11 @@ struct Grab {
      * rodam nela), entao nao precisa de trava. */
     uint8_t baixas[32];
 
+    /* 1 entre o primeiro wl_keyboard.modifiers depois do enter e o leave:
+     * so ai o xkb_state tem as travas (locked) de verdade — ver
+     * grab_travas. Mesma thread de dispatch, sem trava. */
+    int com_foco;
+
     /* ---- clipboard (wl_data_device) ---- */
     struct wl_data_device_manager *data_mgr;
     struct wl_data_device *data_dev;
@@ -181,6 +186,9 @@ static void teclado_keymap(void *dados, struct wl_keyboard *kbd,
     xkb_keymap_unref(g->xkb_keymap);
     g->xkb_keymap = keymap;
     g->xkb_state = state;
+    /* estado novo nasce sem travas: espera o proximo modifiers para nao
+     * mandar "Num Lock desligado" a sessao no meio da troca de layout */
+    g->com_foco = 0;
 }
 
 static void teclado_modifiers(void *dados, struct wl_keyboard *kbd,
@@ -190,6 +198,9 @@ static void teclado_modifiers(void *dados, struct wl_keyboard *kbd,
     Grab *g = (Grab *)dados;
     if (!g->xkb_state) return;
     xkb_state_update_mask(g->xkb_state, depressed, latched, locked, 0, 0, grupo);
+    /* o compositor so manda modifiers para quem tem o foco do teclado, e
+     * manda um logo depois de cada enter */
+    g->com_foco = 1;
 }
 
 /* ainda_valida: a geracao pedida ainda e a que esta em curso, a thread
@@ -263,6 +274,23 @@ int grab_modificadores(Grab *g) {
     if (xkb_state_mod_name_is_active(g->xkb_state, XKB_MOD_NAME_LOGO,
                                      XKB_STATE_MODS_EFFECTIVE) > 0) m |= 8;
     return m;
+}
+
+/* grab_travas: Num/Caps/Scroll Lock nos bits do Synchronize Event do RDP
+ * (1=Scroll 2=Num 4=Caps), ou -1 sem o foco do teclado.
+ *
+ * Sem foco nao ha estado a ler: o teclado_leave zera o xkb_state. Com o foco
+ * recem-ganho tambem nao, ate o primeiro modifiers — e ele que traz as
+ * travas (locked); dai com_foco so ligar la. Pelas luzes (LED) do keymap, e
+ * nao pelo nome do modificador: o Num Lock e "Mod2" num keymap e pode ser
+ * outro em outro, e a luz e o que o operador ve. */
+int grab_travas(Grab *g) {
+    if (!g || !g->xkb_state || !g->com_foco) return -1;
+    int t = 0;
+    if (xkb_state_led_name_is_active(g->xkb_state, XKB_LED_NAME_SCROLL) > 0) t |= 1;
+    if (xkb_state_led_name_is_active(g->xkb_state, XKB_LED_NAME_NUM) > 0) t |= 2;
+    if (xkb_state_led_name_is_active(g->xkb_state, XKB_LED_NAME_CAPS) > 0) t |= 4;
+    return t;
 }
 
 static void teclado_tecla(void *dados, struct wl_keyboard *kbd,
@@ -342,6 +370,7 @@ static void teclado_leave(void *dados, struct wl_keyboard *kbd, uint32_t serial,
      * keysym calculado sairia como se o Ctrl ainda estivesse em baixo. */
     if (g->xkb_state)
         xkb_state_update_mask(g->xkb_state, 0, 0, 0, 0, 0, 0);
+    g->com_foco = 0;
 }
 static void teclado_repeat_info(void *dados, struct wl_keyboard *kbd,
                                 int32_t taxa, int32_t atraso) {
