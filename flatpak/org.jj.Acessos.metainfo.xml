@@ -64,6 +64,13 @@
   <url type="bugtracker">https://github.com/JMoratelli/acessos/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.8.3" date="2026-11-07">
+      <description>
+        <p>Teclado no Windows. No SSH e no VNC o Shift passou a valer para toda a pontuação (Shift+1 sai "!", e ":" e "|" saem certos), e no teclado ABNT2 o ç e os acentos passaram a sair. No RDP passaram a funcionar o "+" e o "*" do teclado numérico, Insert, Caps Lock, Num Lock e a tecla "/?" do ABNT2.</p>
+        <p>Ainda no Windows, Ctrl, Shift e Alt não ficam mais presos na sessão remota depois de um Alt+Tab, de trocar de aba ou de abrir um diálogo. F12, Ctrl+W e Ctrl+G funcionam fora de uma sessão, a busca da lateral não perde mais o foco com uma sessão aberta, clicar na sessão devolve o teclado a ela, e uma sessão que engasga não congela mais a janela enquanto se digita.</p>
+        <p>Nos dois sistemas, Num Lock, Caps Lock e Scroll Lock da sessão RDP acompanham o teclado local, inclusive quando o Windows remoto liga o Num Lock sozinho no logon. No terminal SSH, Ctrl, Shift e Alt com as setas, Home, End, Page Up e Page Down mandam o que o bash e o nano esperam (Ctrl+seta pula palavra), e Shift+Tab volta um campo em menus como o nmtui e o mc.</p>
+      </description>
+    </release>
     <release version="2.8.2" date="2026-10-18">
       <description>
         <p>Os cartões do painel viraram vidro fosco: o fundo da janela aparece desfocado atrás de cada um, então eles ficaram bem mais leves sem que as faixas e os textos do fundo atravessem por trás do nome da máquina. A sombra embaixo dos cartões, que antes quase não aparecia, agora cai suave como a de um objeto de verdade. A barra lateral, o rodapé e a barra das sessões ganharam o mesmo vidro; diálogos, menus e dicas ganharam uma borda de luz, e o fundo escurecido atrás dos diálogos fecha mais nas bordas do que no centro. Passar o mouse sobre cartões, botões e menus muda a cor com uma transição curta, em vez de trocar de uma vez.</p>
