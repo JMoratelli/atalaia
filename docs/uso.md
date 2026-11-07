@@ -80,11 +80,32 @@ um lado e colar do outro funciona nos dois sentidos.
 
 ![SFTP](../screenshots/sftp.png)
 
-À esquerda fica esta máquina, à direita a remota. Arraste arquivos de um lado
-para o outro, ou marque e use **enviar** e **baixar**. **+ pasta** cria uma
-pasta, **excluir** apaga os itens marcados (pedindo confirmação), e o campo
-**filtrar nesta pasta** ajuda em pastas grandes. **Trocar máquina** aponta o
-mesmo painel para outra máquina sem fechar a aba.
+À esquerda fica esta máquina, à direita a remota. Cada lado tem as suas
+ferramentas no cabeçalho (pasta de cima, atualizar, nova pasta, renomear e
+excluir), o caminho em pedaços clicáveis (clicar no vazio ao lado deixa
+digitar um caminho) e o filtro da pasta aberta.
+
+Para transferir:
+
+- **arraste** o arquivo (ou os marcados) até o outro lado. O painel que vai
+  receber fica com contorno azul; soltando em cima de uma pasta, o arquivo
+  vai para dentro dela;
+- **dois cliques** num arquivo mandam ele para o outro lado;
+- as setas do meio (**enviar** e **baixar**) mandam os marcados.
+
+Clique marca um item, Ctrl+clique soma ou tira, Shift+clique marca uma faixa.
+O botão direito traz Abrir, Enviar ou Baixar, Renomear, Copiar caminho, Nova
+pasta e Excluir. Fora dos campos de texto, valem `Delete` (excluir), `F2`
+(renomear), `F5` (atualizar), `Enter` (abrir a pasta ou transferir),
+`Backspace` (pasta de cima) e `Ctrl+A` (marcar tudo).
+
+Arquivo que já existe do outro lado não é sobrescrito sem perguntar: antes de
+começar, o app lista os conflitos e oferece sobrescrever, pular os
+existentes ou cancelar. Pasta é copiada inteira, juntando com o que já
+existe no destino. Excluir, dos dois lados, mostra antes quantos arquivos e
+pastas vão sair. O rodapé acompanha a transferência com a barra, a
+quantidade e a velocidade. **Trocar máquina** aponta o mesmo painel para
+outra máquina sem fechar a aba.
 
 ## Atalhos de teclado
 

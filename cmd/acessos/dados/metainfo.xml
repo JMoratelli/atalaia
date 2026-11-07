@@ -59,6 +59,14 @@
   <url type="bugtracker">https://github.com/JMoratelli/atalaia/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.9.2" date="2026-11-07">
+      <description>
+        <p>A transferência de arquivos (SFTP) ganhou o visual da 2.9 e passou a funcionar como nos outros clientes de SFTP. Arrastar um arquivo leva esse arquivo (antes só ia o que já estivesse marcado), com o que vai junto preso ao ponteiro e o painel de destino aceso; soltar em cima de uma pasta manda para dentro dela. Dois cliques num arquivo mandam para o outro lado, Shift+clique marca uma faixa e o botão direito traz abrir, transferir, renomear, copiar o caminho, criar pasta e excluir. Fora dos campos, Delete, F2, F5, Enter, Backspace e Ctrl+A funcionam como num gerenciador de arquivos.</p>
+        <p>Cada lado tem as suas ferramentas, e criar pasta, renomear e excluir passaram a valer também na sua máquina, com a mesma confirmação com contagem do remoto. O caminho virou pedaços clicáveis, e o rodapé acompanha a transferência com barra, quantidade e velocidade.</p>
+        <p>Segurança: no Windows, a biblioteca do VNC passou a ir com as três correções de 2026 contra servidor malicioso (duas delas de gravidade alta), que até aqui só o pacote do Linux tinha. No Linux, o app passou a ser compilado com o Go 1.27.3, que corrige falhas da biblioteca padrão usadas na busca de atualizações por HTTPS. Também subiram as bibliotecas de SFTP, de D-Bus e de imagens.</p>
+        <p>No Linux, os acentos por tecla morta (´, ~, ^) voltaram a sair nos campos de texto do app digitando no ritmo normal.</p>
+      </description>
+    </release>
     <release version="2.9.1" date="2026-11-07">
       <description>
         <p>O cartão de boas-vindas do Painel saiu na 2.9.0 com o nome de uma empresa escrito fixo acima da saudação. Agora a linha mostra só "Painel de acessos", e o nome da empresa aparece quando o inventário diz qual é: "empresa = ..." na seção [geral] do conexoes.ini.</p>

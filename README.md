@@ -58,9 +58,11 @@ sessão.
 
 ![Sessão VNC mostrando a tela de um caixa de supermercado](screenshots/vnc.png)
 
-**Arquivos (SFTP)**: esta máquina à esquerda, a remota à direita.
+**Arquivos (SFTP)**: esta máquina à esquerda, a remota à direita. Arraste
+de um lado para o outro (soltando em cima de uma pasta, vai para dentro
+dela), ou dê dois cliques no arquivo.
 
-![Transferência de arquivos com duas colunas](screenshots/sftp.png)
+![Dois arquivos sendo arrastados para a pasta backups do servidor](screenshots/sftp.png)
 
 **Execução em massa.** O comando roda primeiro em três máquinas; só depois
 que você confere o resultado ele segue para as outras, uma por vez ou em
