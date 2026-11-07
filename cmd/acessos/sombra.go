@@ -45,9 +45,12 @@ type elevacao [2]camadaSombra
 
 var (
 	// elevCard: cards, menus, dicas, listas suspensas.
+	// No claro a sombra subiu na 2.9.2 (0,15 e 0,26 antes): sobre a
+	// folha quase branca ela sumia, e os cartões brancos pareciam chapados
+	// na página.
 	elevCard = elevacao{
-		{dy: 1, sigma: 1.5, alfa: 0.15, alfaEscuro: 0.45},
-		{dy: 5, sigma: 6, spread: -3, alfa: 0.26, alfaEscuro: 0.55},
+		{dy: 1, sigma: 1.5, alfa: 0.20, alfaEscuro: 0.45},
+		{dy: 5, sigma: 6, spread: -3, alfa: 0.34, alfaEscuro: 0.55},
 	}
 	// elevDialogo: diálogos e o cartão do splash, mais altos que tudo.
 	elevDialogo = elevacao{

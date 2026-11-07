@@ -272,7 +272,11 @@ func (t *sftpTab) painel(gtx layout.Context, p *painelArquivos, origem image.Poi
 	p.linhaH = gtx.Dp(sftpLinhaH)
 
 	alvo := t.arrastando && t.origem != nil && t.origem != p && t.ladoSob(t.posAtual) == p
-	superficieVidro(gtx, size, tema.CardTinta, tema.CardBorda, sftpPainelR)
+	// Sombra como a dos cards do Painel: no claro é ela que separa o
+	// cartão branco da folha clara (no escuro a borda de luz do vidro já
+	// fazia isso, e a falta dela só aparecia no claro).
+	sombra(gtx, size, sftpPainelR)
+	superficieVidro(gtx, size, tema.PainelTinta, tema.CardBorda, sftpPainelR)
 	if alvo {
 		// O painel que vai receber acende como campo focado: anel azul.
 		r := gtx.Dp(sftpPainelR)

@@ -98,6 +98,12 @@ type Tema struct {
 	// CardTinta/CardTintaH: a tinta do card sobre a folha (fosca por
 	// baixo), em repouso e sob o mouse; CardBorda, a borda dele.
 	CardTinta, CardTintaH, CardBorda color.NRGBA
+	// PainelTinta: a tinta dos cartões GRANDES (os dois lados do SFTP, o
+	// painel do que rodar na execução em massa). No claro, a CardTinta
+	// quase sólida num cartão da altura da janela virava uma parede branca
+	// sobre a folha clara; mais fina, a folha azulada aparece. No escuro é
+	// a própria CardTinta.
+	PainelTinta color.NRGBA
 	// Escuro diz qual paleta é esta: o Gio compõe overlay translúcido
 	// mais forte sobre fundo escuro (espaço linear, não sRGB) e quem pinta
 	// translucidez precisa de alfa bem mais baixo ali.
@@ -189,7 +195,8 @@ var temaClaro = Tema{
 	// Mais opaco e com borda mais firme que na primeira versão da 2.9:
 	// no claro os cards liam "sem peso", quase da cor da folha.
 	CardTinta: rgba(0xffffff, 0.90), CardTintaH: rgba(0xffffff, 1.0), CardBorda: hex(0xc9d2dd),
-	Escuro: false,
+	PainelTinta: rgba(0xffffff, 0.58),
+	Escuro:      false,
 }
 
 var temaEscuro = Tema{
@@ -258,7 +265,8 @@ var temaEscuro = Tema{
 	Brilho:   rgba(0x4263eb, 0.13), BrilhoVeu: transparente,
 	Elevado: hex(0x2a323d), Afundado: hex(0x11161c),
 	CardTinta: rgba(0x1e242d, 0.74), CardTintaH: rgba(0x1c222a, 0.96), CardBorda: hex(0x29313b),
-	Escuro: true,
+	PainelTinta: rgba(0x1e242d, 0.74),
+	Escuro:      true,
 }
 
 // paletaMaterial põe a paleta do app no material.Theme da janela. É dela
