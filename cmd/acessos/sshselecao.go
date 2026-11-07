@@ -8,7 +8,7 @@ import (
 )
 
 // Gestos de mouse do terminal que todo terminal tem e o nosso não tinha
-// (2.9.3): duplo clique marca a palavra, triplo marca a linha, e o botão
+// (2.9.2): duplo clique marca a palavra, triplo marca a linha, e o botão
 // direito traz copiar e colar.
 
 // caractereDePalavra: o que o duplo clique leva junto. Além de letra e

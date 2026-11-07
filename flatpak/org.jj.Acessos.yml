@@ -148,6 +148,11 @@ modules:
         /app/share/metainfo/org.jj.Acessos.metainfo.xml
       - install -Dm644 icones/acessos.svg
         /app/share/icons/hicolor/scalable/apps/org.jj.Acessos.svg
+      # A licença do app e os avisos de terceiros (o que de outros vai no
+      # pacote, com as licenças): vão junto, como as licenças pedem.
+      - install -Dm644 LICENSE /app/share/licenses/org.jj.Acessos/LICENSE
+      - install -Dm644 THIRD-PARTY-NOTICES.md
+        /app/share/licenses/org.jj.Acessos/THIRD-PARTY-NOTICES.md
     sources:
       - type: archive
         url: https://go.dev/dl/go1.27.3.linux-amd64.tar.gz

@@ -7,7 +7,7 @@ import (
 	"github.com/hinshun/vt10x"
 )
 
-// Clique move o cursor (2.9.3).
+// Clique move o cursor (2.9.2).
 //
 // Num terminal o clique só vira coisa do PROGRAMA quando ele pede relato
 // de mouse (htop, mc, o nano com "set mouse"); o nano de fábrica não pede,

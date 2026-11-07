@@ -1,9 +1,45 @@
-# Atalaia Acessos
+<div align="center">
 
+<!-- o banner da marca: o escuro no tema escuro do GitHub, o claro no claro -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="icones/banner-escuro.png">
   <img src="icones/banner-claro.png" alt="Atalaia Acessos: VNC, RDP, SSH e SFTP em abas, numa janela só">
 </picture>
+
+**Acesso remoto às máquinas da empresa numa janela só: tela, Windows, terminal e arquivos em abas,<br>
+comando em centenas de máquinas de uma vez e busca de qualquer lugar. Livre, gratuito, Linux e Windows.**
+
+<!-- os selos do projeto: a versão sai sozinha da última release; testes contados com
+     grep '^func Test' em cmd/ e internal/ — atualizar a cada versão -->
+<p>
+  <a href="https://github.com/JMoratelli/atalaia/releases/latest"><img alt="versão" src="https://img.shields.io/github/v/release/JMoratelli/atalaia?style=flat-square&label=vers%C3%A3o&color=5AA2FF"></a>
+  <a href="#instalar"><img alt="Linux e Windows" src="https://img.shields.io/badge/sistemas-Linux%20%C2%B7%20Windows-1C211F?style=flat-square"></a>
+  <a href="docs/compilar.md"><img alt="226 testes" src="https://img.shields.io/badge/testes-226%20casos-38D9A9?style=flat-square"></a>
+  <a href="LICENSE"><img alt="licença GPLv3" src="https://img.shields.io/badge/licen%C3%A7a-GPLv3-B197FC?style=flat-square"></a>
+  <a href="#comparação"><img alt="preço: R$ 0" src="https://img.shields.io/badge/pre%C3%A7o-R%24%200-E0B458?style=flat-square"></a>
+</p>
+
+<!-- a stack, com o logo de cada uma (shields.io); mudou uma versão maior, muda aqui -->
+<p>
+  <img alt="Go 1.27" src="https://img.shields.io/badge/Go-1.27-00ADD8?style=flat-square&logo=go&logoColor=white">
+  <img alt="Gio 0.10, interface na GPU" src="https://img.shields.io/badge/Gio-0.10%20%C2%B7%20GPU-1C211F?style=flat-square">
+  <img alt="OpenGL ES e Vulkan" src="https://img.shields.io/badge/OpenGL%20ES%20%C2%B7%20Vulkan-Linux-5586A4?style=flat-square&logo=vulkan&logoColor=white">
+  <img alt="Direct3D 11" src="https://img.shields.io/badge/Direct3D%2011-Windows-0078D4?style=flat-square&logo=windows&logoColor=white">
+  <img alt="FreeRDP 3.32" src="https://img.shields.io/badge/FreeRDP-3.32-D94A3B?style=flat-square">
+  <img alt="LibVNC 0.9.15" src="https://img.shields.io/badge/LibVNC-0.9.15-4A6FA5?style=flat-square">
+  <img alt="SSH e SFTP" src="https://img.shields.io/badge/SSH%20%C2%B7%20SFTP-x%2Fcrypto%20%C2%B7%20pkg%2Fsftp-2E8B57?style=flat-square">
+  <img alt="Wayland" src="https://img.shields.io/badge/Wayland-nativo-FFBC00?style=flat-square&logo=wayland&logoColor=black">
+  <img alt="Flatpak" src="https://img.shields.io/badge/Flatpak-25.08-4A90D9?style=flat-square&logo=flatpak&logoColor=white">
+  <img alt="Inno Setup" src="https://img.shields.io/badge/Windows-Inno%20Setup-264B99?style=flat-square">
+</p>
+
+[**Instalar**](#instalar) · [**Documentação**](#documentação) · [**Novidades**](https://github.com/JMoratelli/atalaia/releases) · [**Avisos de terceiros**](THIRD-PARTY-NOTICES.md)
+
+[O que faz](#o-que-ele-faz) · [Telas](#telas) · [Desempenho](#desempenho-e-estabilidade) · [Comparação](#comparação) · [Primeiros passos](#primeiros-passos) · [Licença](#licença)
+
+</div>
+
+---
 
 O Atalaia Acessos junta numa janela só o que o suporte usa para chegar nas
 máquinas: a tela (VNC), a área de trabalho do Windows (RDP), o terminal (SSH)
@@ -89,6 +125,64 @@ se ela falha, viram um × vermelho.
 
 <img src="screenshots/conectando.png" width="600" alt="Aba RDP conectando, com o favo roxo pulsando">
 
+## Desempenho e estabilidade
+
+- **Tudo na GPU.** A interface inteira é desenhada pela placa de vídeo, com o
+  [Gio](https://gioui.org): OpenGL ES ou Vulkan no Linux, Direct3D 11 no
+  Windows. As telas remotas (VNC e RDP) e o terminal também são compostos na
+  GPU; a CPU fica para decodificar o que chega da rede.
+- **Abre rápido e não gasta parado.** Do comando até a janela pronta, com 24
+  máquinas no Painel: cerca de **0,25 s**. Parado, **0% de CPU**: o app só
+  redesenha quando algo muda, e uma aba escondida não redesenha nem quando a
+  sessão dela recebe dados.
+- **Leve.** Cerca de **200 MB** de memória com o Painel aberto (app e serviço
+  do atalho, contando o driver de vídeo), e **215 MB** com uma sessão VNC,
+  uma SSH e uma SFTP abertas. O pacote Flatpak tem 7 MB; o instalador do
+  Windows, 49 MB, com o FreeRDP e tudo de que ele precisa.
+- **Uma sessão não derruba as outras.** Cada tela remota (VNC ou RDP) roda num
+  processo próprio: se uma travar ou cair, o app e as outras sessões seguem.
+  Conexão que a rede derrubou sem avisar é detectada pelo sinal de vida e
+  oferece a reconexão (ou reconecta sozinha, se a máquina estiver marcada
+  para isso).
+- **Testado.** 226 testes automatizados rodam antes de cada versão, mais
+  ferramentas de teste em janela de verdade para o que um teste comum não
+  alcança (teclado, área de transferência, tela cheia, várias janelas).
+
+<sub>Medido em 07/11/2026 num Ryzen 5 5600 com Radeon RX 7600, KDE Plasma 6 em
+Wayland, com o inventário de demonstração. Memória como PSS (a parte de cada
+processo nas bibliotecas compartilhadas, sem contar em dobro).</sub>
+
+## Comparação
+
+| | Linux | Windows | VNC, RDP, SSH e SFTP embutidos | Mesmo comando em várias máquinas | Atalho global para achar a máquina | Preço |
+|---|---|---|---|---|---|---|
+| **Atalaia Acessos** | sim | sim | sim | em lote: testa em 3, para na falha e mostra o resultado de cada máquina | sim, também no Linux e com o app fechado | **R$ 0**, livre (GPLv3), sem limite |
+| Remmina | sim | não | sim | não encontramos | não encontramos | grátis, livre (GPLv2+) |
+| MobaXterm | não | sim | sim | replica a digitação (MultiExec) | não encontramos | Home grátis até 12 sessões; Professional US$ 69 por usuário |
+| mRemoteNG | não | sim | VNC, RDP e SSH; SFTP só para enviar arquivo | replica a digitação no SSH | não encontramos | grátis, livre (GPLv2); última versão estável de 2019 |
+| Royal TS | não | sim | sim | sequências de teclas e tarefas em várias conexões | sim, no Windows | grátis até 10 conexões; 49 € por usuário |
+| Devolutions RDM | sim | sim | sim | replica a digitação no SSH | no Windows e no macOS; no Linux só com o app em foco | grátis para uso individual; equipe US$ 400 por usuário por ano |
+| Termius | sim | sim | só SSH e SFTP | snippets em vários hosts | não encontramos | Starter grátis; Pro US$ 10 por mês |
+
+O que o Atalaia junta e os outros não juntam: **os quatro protocolos
+embutidos, livre e nos dois sistemas**, sem limite de sessões nem licença por
+pessoa. Na execução em massa, em vez de repetir a digitação em várias abas,
+ele roda o comando como um lote: primeiro em três máquinas, espera você
+conferir, para na falha perguntando o que fazer e mostra o resultado de cada
+máquina na colmeia. E foi feito para o suporte de lojas: Painel com quem está
+respondendo, destino avulso digitado na busca, cofre com senha mestra e
+credenciais compartilhadas por apelido.
+
+<sub>Recursos e preços conferidos nas páginas oficiais em 07/11/2026; preços sem
+impostos, como cada fabricante divulga. "Não encontramos" quer dizer que a
+documentação oficial não menciona, não que seja impossível. Fontes:
+[Remmina](https://remmina.org/remmina-features/),
+[MobaXterm](https://mobaxterm.mobatek.net/download.html),
+[mRemoteNG](https://github.com/mRemoteNG/mRemoteNG/releases),
+[Royal TS](https://www.royalapps.com/ts/buy),
+[Devolutions RDM](https://devolutions.net/pricing/),
+[Termius](https://termius.com/pricing).</sub>
+
 ## Instalar
 
 Os pacotes ficam na página de
@@ -165,6 +259,12 @@ git checkout 1.x        # a linha de manutenção
 ## Licença
 
 GNU GPLv3. Veja [LICENSE](LICENSE).
+
+O app usa trabalho de muita gente: o Gio, o FreeRDP, a LibVNC, as bibliotecas
+Go de SSH e SFTP, as fontes IBM Plex, Sora e Space Grotesk, entre outros. A
+lista completa, com a versão e a licença de cada um, está em
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), que também vai dentro dos
+pacotes e abre pelo **Sobre** do app.
 
 ## Sobre o desenvolvimento
 

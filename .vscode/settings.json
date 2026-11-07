@@ -35,11 +35,22 @@
   // O gopls também ignora as exclusões do editor e varre o diretório por
   // conta própria — chegou a passar de 900% de CPU. Sintaxe própria: o
   // prefixo "-" exclui o diretório a partir da raiz do workspace.
+  //
+  // GOWORK=off (2026-11-07, de novo a 1000% de CPU): o go.work local põe
+  // third_party/gio e third_party/vt10x como módulos DO WORKSPACE, e isso
+  // passa por cima do directoryFilters — a cada build (que regenera o
+  // vendor/) ele reindexava o Gio inteiro. O go.mod já aponta para os dois
+  // pelo replace, então o gopls continua achando o código deles, só que
+  // como dependência: carrega o que o app usa, não o fork inteiro.
   "gopls": {
+    "build.env": {
+      "GOWORK": "off"
+    },
     "build.directoryFilters": [
       "-build",
       "-.flatpak-builder",
       "-vendor",
+      "-third_party",
       "-python",
       "-testes"
     ]

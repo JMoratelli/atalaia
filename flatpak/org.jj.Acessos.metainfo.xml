@@ -66,6 +66,7 @@
         <p>No terminal SSH, clicar no texto leva o cursor até ali (no nano e no vim também), duplo clique marca a palavra, triplo marca a linha e o botão direito traz copiar e colar. Colar várias linhas num programa que não protege a colagem pergunta antes, porque no shell cada linha roda assim que chega. A roda do mouse anda pelo texto no nano, no less e no man. O SSH e o SFTP mandam um sinal de vida a cada 30 segundos: conexão parada que a rede derrubou sem avisar passa a aparecer como caída, com o Reconectar, em vez de uma tela parada.</p>
         <p>No tema claro, os cartões grandes deixaram de ser paredes brancas: ganharam sombra e uma tinta mais fina, e a sombra dos cards ficou mais visível.</p>
         <p>Segurança: no Windows, a biblioteca do VNC passou a ir com as três correções de 2026 contra servidor malicioso (duas delas de gravidade alta), que até aqui só o pacote do Linux tinha. No Linux, o app passou a ser compilado com o Go 1.27.3, que corrige falhas da biblioteca padrão usadas na busca de atualizações por HTTPS. Também subiram as bibliotecas de SFTP, de D-Bus e de imagens, e os acentos por tecla morta (´, ~, ^) voltaram a sair nos campos de texto do Linux.</p>
+        <p>O app passou a levar a lista dos componentes de terceiros que usa, com versão, licença e o texto de cada licença (THIRD-PARTY-NOTICES), dentro do pacote do Linux e do instalador do Windows; o Sobre tem um atalho para ela.</p>
       </description>
     </release>
     <release version="2.9.1" date="2026-11-07">

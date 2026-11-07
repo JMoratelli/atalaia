@@ -22,6 +22,7 @@ import (
 type dlgSobre struct {
 	btnFechar   widget.Clickable
 	btnHomepage widget.Clickable
+	btnAvisos   widget.Clickable
 }
 
 var (
@@ -44,6 +45,12 @@ func (d *dlgSobre) Corpo(gtx layout.Context, th *material.Theme) layout.Dimensio
 	homepage := extraiMeta(reHomepage)
 	if d.btnHomepage.Clicked(gtx) {
 		abrirNoNavegador(homepage)
+	}
+	// Os avisos de terceiros vão também dentro do pacote (ao lado do .exe
+	// no Windows, em share/licenses no Flatpak); o link é o caminho curto.
+	avisos := strings.TrimSuffix(homepage, "/") + "/blob/master/THIRD-PARTY-NOTICES.md"
+	if d.btnAvisos.Clicked(gtx) {
+		abrirNoNavegador(avisos)
 	}
 
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -81,6 +88,16 @@ func (d *dlgSobre) Corpo(gtx layout.Context, th *material.Theme) layout.Dimensio
 					cor = tema.AzulH
 				}
 				return rotulo(th, fonteMono, unit.Sp(11), homepage, cor)(gtx)
+			})
+		}),
+		espaco(4),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return d.btnAvisos.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				cor := tema.Azul
+				if d.btnAvisos.Hovered() {
+					cor = tema.AzulH
+				}
+				return rotulo(th, fonteMono, unit.Sp(11), "Componentes de terceiros e licenças", cor)(gtx)
 			})
 		}),
 		espaco(16),

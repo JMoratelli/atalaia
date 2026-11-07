@@ -1,6 +1,6 @@
 package main
 
-// A cara da execução em massa (2.9.3): o cartão da execução no alto, com a
+// A cara da execução em massa (2.9.2): o cartão da execução no alto, com a
 // COLMEIA — um favo por máquina, na cor do estado, pulsando enquanto roda
 // —, e o mesmo favo pequeno no começo de cada linha. É o favo do
 // "conectando" das abas levado para o lote: dá para ver 200 caixas de

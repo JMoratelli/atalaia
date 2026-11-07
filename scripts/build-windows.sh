@@ -284,6 +284,15 @@ scripts/crt-windows.sh --conferir "$DIST/acessos.exe" \
 echo ">> resolvendo DLLs"
 python3 scripts/dlls-windows.py "$DIST/acessos.exe" "$SYSROOT" "$DIST"
 
+# 5a. Licenças: a do app, os avisos de terceiros (THIRD-PARTY-NOTICES.md,
+#     gerado por scripts/avisos-terceiros.py) e os textos das licenças dos
+#     pacotes do MSYS2 que as DLLs acima trazem, que o sysroot guarda em
+#     share/licenses. Vão ao lado do .exe, e o instalador leva tudo junto.
+echo ">> copiando as licenças"
+cp LICENSE THIRD-PARTY-NOTICES.md "$DIST/"
+rm -rf "$DIST/licencas"
+cp -r "$SYSROOT/share/licenses" "$DIST/licencas"
+
 # 5b. Provider "legacy" do OpenSSL. NÃO é pego pelo passo acima, e esta é
 #     a armadilha: o dlls-windows.py percorre a TABELA DE IMPORTAÇÃO do
 #     PE, e um provider do OpenSSL 3 não está nela — é carregado em tempo
