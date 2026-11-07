@@ -1,175 +1,166 @@
-# Disclaimer
+# Atalaia Acessos
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="icones/banner-escuro.png">
+  <img src="icones/banner-claro.png" alt="Atalaia Acessos: VNC, RDP, SSH e SFTP em abas, numa janela só">
+</picture>
+
+O Atalaia Acessos junta numa janela só o que o suporte usa para chegar nas
+máquinas: a tela (VNC), a área de trabalho do Windows (RDP), o terminal (SSH)
+e os arquivos (SFTP). Cada máquina abre numa aba, o Painel mostra quem está
+respondendo, e um atalho de teclado acha qualquer máquina sem precisar ir até
+o programa.
+
+Roda no Linux (Flatpak) e no Windows, a partir do mesmo código.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/principal.png">
+  <img src="screenshots/principal-claro.png" alt="Painel com as máquinas agrupadas por loja, o cartão de boas-vindas e os números do inventário">
+</picture>
+
+<sub>As imagens usam um inventário de demonstração: empresa, máquinas, pessoas e endereços são fictícios.</sub>
+
+## O que ele faz
+
+- **Painel com todas as máquinas**, em grupos e subgrupos (lojas, setores,
+  servidores), cada uma com um ponto que diz se ela está respondendo. O
+  filtro procura por nome, endereço ou grupo, e clicar no cartão abre a
+  máquina no protocolo escolhido.
+- **Sessões em abas.** VNC e RDP embutidos, com a imagem ajustada ao tamanho
+  da aba; terminal SSH com a biblioteca de comandos ao lado; SFTP com a sua
+  máquina de um lado e a remota do outro, arrastando arquivos entre as duas.
+- **RDP em janela própria**, inclusive em tela cheia, sem derrubar a sessão.
+- **Execução em massa**: o mesmo comando em dezenas de máquinas, testado
+  antes em três, com o resto esperando a sua confirmação.
+- **Busca de qualquer lugar** com `Ctrl+Shift+F12`: uma caixa aparece por
+  cima do que estiver na tela, você digita parte do nome e a máquina abre
+  numa aba.
+- **Destino avulso**: um endereço que não está cadastrado (`10.1.1.99`,
+  `suporte@10.1.1.99`, `rdp servidor`) vira conexão na hora, sem cadastro.
+- **Senhas protegidas**: o cofre cifra as senhas salvas com uma senha mestra,
+  e o chaveiro guarda credenciais que várias máquinas usam, chamadas por um
+  apelido.
+- **Identidade do servidor conferida**: chave SSH e certificado RDP novos ou
+  trocados aparecem para você decidir, e nunca são aceitos sozinhos.
+- **Atualização pelo próprio app**: quando sai versão nova ele avisa e
+  instala por cima, na hora que você escolher.
+- Tema claro e escuro, letra maior com um clique (`A+`) e barra lateral que
+  recolhe com `F12`.
+
+## Telas
+
+**Terminal SSH**, com os snippets ao lado: um clique manda o comando para a
+sessão.
+
+![Terminal SSH num servidor de arquivos, com a lista de snippets à direita](screenshots/ssh.png)
+
+**Tela remota (VNC)**, aqui no caixa de uma loja.
+
+![Sessão VNC mostrando a tela de um caixa de supermercado](screenshots/vnc.png)
+
+**Arquivos (SFTP)**: esta máquina à esquerda, a remota à direita.
+
+![Transferência de arquivos com duas colunas](screenshots/sftp.png)
+
+**Execução em massa.** O comando roda primeiro em três máquinas; só depois
+que você confere o resultado ele segue para as outras, uma por vez ou em
+paralelo.
+
+![Teste inicial em três caixas, esperando a confirmação para seguir](screenshots/canario.png)
+
+![Resultado nos dez caixas, com um que não respondeu](screenshots/execucao-massa.png)
+
+**Biblioteca de snippets**, os comandos que você usa sempre, com a
+plataforma e a indicação de quem precisa de root.
+
+![Editor de snippets](screenshots/snippets.png)
+
+Enquanto uma conexão abre, os favos pulsam em volta do ícone do protocolo;
+se ela falha, viram um × vermelho.
+
+<img src="screenshots/conectando.png" width="600" alt="Aba RDP conectando, com o favo roxo pulsando">
+
+## Instalar
+
+Os pacotes ficam na página de
+[versões](https://github.com/JMoratelli/atalaia/releases/latest).
+
+**Linux.** Baixe o `org.jj.Acessos-<versão>.flatpak` e instale para o seu
+usuário:
+
+```bash
+flatpak install --user org.jj.Acessos-2.9.0.flatpak
+```
+
+O pacote usa o runtime `org.freedesktop.Platform` 25.08, que o Flatpak busca
+no Flathub se ainda não estiver instalado. Depois é só abrir pelo menu de
+aplicativos ou com `flatpak run org.jj.Acessos`.
+
+**Windows.** Baixe o `AcessosSetup-<versão>.exe` e execute. Ele instala só
+para o seu usuário, sem pedir administrador, e cria o atalho no Menu Iniciar.
+
+Daí em diante as atualizações chegam pelo próprio app.
+
+## Primeiros passos
+
+Na primeira vez o app cria um inventário de exemplo. As máquinas são
+cadastradas pelo botão **Nova conexão** no Painel, ou direto no
+`conexoes.ini`, que é um texto simples com uma seção por máquina:
+
+```ini
+[CAIXA-01]
+grupo = Loja Centro;Caixas
+host = 10.20.1.11
+descricao = Caixa 1, entrada
+vnc = 1
+ssh = 1
+ssh_usuario = suporte
+```
+
+| Onde o inventário fica | |
+|---|---|
+| Linux (Flatpak) | `~/.var/app/org.jj.Acessos/config/acessos/conexoes.ini` |
+| Linux (compilado à mão) | `~/.config/acessos/conexoes.ini` |
+| Windows | `%APPDATA%\acessos\conexoes.ini` |
+
+Para guardar o inventário numa pasta sincronizada, aponte para ela com
+`caminho` na seção `[geral]`. Para salvar senhas cifradas, clique no cadeado
+no topo da janela e crie a senha mestra.
+
+## Documentação
+
+- [Inventário e preferências](docs/inventario.md): o `conexoes.ini` campo a
+  campo, grupos e a seção `[geral]`.
+- [Uso no dia a dia](docs/uso.md): Painel, abas, sessões, destino avulso e
+  atalhos de teclado.
+- [Execução em massa e snippets](docs/execucao-em-massa.md)
+- [Senhas e identidade dos servidores](docs/senhas.md): cofre, chaveiro,
+  chaves SSH e certificados RDP.
+- [Atalho global](docs/atalho-global.md): o `Ctrl+Shift+F12` e o serviço que
+  o mantém valendo com o app fechado.
+- [Compilar](docs/compilar.md): Flatpak, build de desenvolvimento, Windows a
+  partir do Linux e a organização do código.
+
+## A versão em Python (1.x)
+
+Até a 1.x o app era escrito em Python. Desde a 2.0 ele é escrito em Go, com
+a interface desenhada na GPU, e lê os mesmos arquivos de antes
+(`conexoes.ini`, `chaveiro.ini`, `snippets.ini`), no mesmo lugar: atualizar
+da 1.x não pede migração. O código antigo continua acessível:
+
+```bash
+git checkout v1.2.2     # a última versão publicada em Python
+git checkout 1.x        # a linha de manutenção
+```
+
+## Licença
+
+GNU GPLv3. Veja [LICENSE](LICENSE).
+
+## Sobre o desenvolvimento
+
 Desenvolvido com IA, revisado por mim
   Este repositório utiliza inteligência artificial no processo criativo (vibecoding). No entanto, todo o código é revisado, testado e mantido 100% manualmente por mim, garantindo cuidado em cada detalhe como único mantenedor do projeto (por enquanto).
 
 AI-Assisted, Human-Crafted
   This repository leverages artificial intelligence during the creative process (vibecoding). However, all code is 100% manually reviewed, tested, and maintained by me, ensuring care and quality as a solo maintainer (for now).
-  
-# Atalaia Acessos
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="icones/banner-escuro.svg">
-  <img src="icones/banner-claro.svg" alt="Atalaia Acessos — VNC, RDP, SSH e SFTP em abas, numa janela só">
-</picture>
-
-Gerenciador de acesso remoto às máquinas — VNC, RDP, SSH e transferência de
-arquivos, em abas.
-
-A partir da **2.0** o aplicativo é escrito em **Go**, com interface
-desenhada na GPU. O que ele lê e escreve não mudou: os mesmos
-`conexoes.ini`, `chaveiro.ini` e `snippets.ini` de sempre, no mesmo lugar.
-Instalar a 2.0 por cima da 1.x não pede migração nenhuma.
-
-## A versão em Python (1.x)
-
-Ela não foi apagada. O código continua acessível de duas formas:
-
-```bash
-git checkout v1.2.2     # a última versão publicada em Python
-git checkout 1.x        # a linha de manutenção, caso precise de correção
-```
-
-`master` segue a versão nova. É o arranjo usual quando um projeto troca de
-implementação: a linha antiga vive na sua própria branch e nas tags, sem
-uma cópia morta ocupando espaço na árvore atual — cópia duplicada envelhece
-sem ninguém perceber e não tem histórico próprio.
-
-## Instalar
-
-```bash
-./build.sh --instalar     # constrói o Flatpak e instala para o usuário
-```
-
-Depois: pelo menu de aplicativos, ou `flatpak run org.jj.Acessos`.
-
-| Comando | O que faz |
-|---|---|
-| `./build.sh` | constrói e gera `build/org.jj.Acessos-<versão>.flatpak` |
-| `./build.sh --instalar` | constrói, gera o bundle e instala ou atualiza |
-| `./build.sh --limpar` | apaga `build/` inteiro |
-
-Para desenvolver sem empacotar, com as bibliotecas do sistema
-(`libvncclient`, `freerdp3`, `wayland-client`, `xkbcommon`):
-
-```bash
-go build -o acessos ./cmd/acessos && ./acessos
-```
-
-Sem argumento ele abre o inventário padrão
-(`$XDG_CONFIG_HOME/acessos/conexoes.ini`), criando um exemplo comentado na
-primeira execução. `-ini` aponta para outro arquivo.
-
-## Atalho global
-
-`Ctrl+Shift+F12` abre uma caixa de busca pequena por cima do que estiver na
-tela, sem precisar ir até a janela do programa: digite parte do nome da
-máquina, escolha, e ela abre numa aba nova — com a janela do Atalaia Acessos vindo
-para a frente junto. Máquina que já está aberta troca para a aba dela.
-
-Cada linha traz a mesma fileira de ícones do Painel: clicar no ícone abre
-aquele protocolo, `Enter` abre o preferido, `Esc` fecha. Um destino que não
-está cadastrado aparece como última linha quando a busca não acha nada.
-
-O atalho vale **com o app fechado**: quem o segura é um processo pequeno e
-sem janela (`acessos -servico`), que sobe junto com o app na primeira vez e
-continua vivo depois que a janela fecha. Com o app aberto, o atalho pipoca a
-caixa nele; com o app fechado, a caixa nasce no serviço e a janela grande só
-sobe quando uma máquina for escolhida. Esse mesmo serviço dá **instância
-única**: abrir o Atalaia Acessos de novo manda o pedido para a janela que já existe
-em vez de abrir uma segunda (e, antes disso, um aperto de tecla chegava a
-abrir duas caixas, uma por instância).
-
-Para o atalho existir logo depois de um login, sem ninguém abrir o app
-antes, o serviço pede ao sistema — uma vez só — permissão para subir
-sozinho (portal `Background`). A resposta fica gravada em `[geral]
-atalho_autostart` no `conexoes.ini` (`1` aceito, `0` recusado). Para mudar
-de ideia depois, a caixa **"manter o atalho valendo depois do login"** nos
-Ajustes pergunta ao sistema de novo — desmarcá-la REVOGA o autostart, e não
-só regrava a chave: quem sobe o serviço no login é o portal, então mexer só
-no arquivo deixaria a caixa desmarcada e o serviço subindo assim mesmo.
-
-O serviço é um processo separado e proposital: ele NÃO morre junto com a
-janela. Para derrubá-lo (ao trocar de versão à mão, por exemplo),
-`pkill -f "acessos -servico"`; o socket dele fica em
-`$XDG_RUNTIME_DIR/acessos/servico.sock`. Uma versão nova do app pede a
-vaga sozinha ao subir, então numa atualização normal não é preciso fazer
-nada.
-
-No Linux quem amarra a tecla é o sistema, não o app — é assim que o Wayland
-permite atalho global, pelo portal `GlobalShortcuts`. O serviço pede
-`Ctrl+Shift+F12`, e o KDE confirma **uma vez só** na primeira execução. Se
-esse diálogo for recusado, o atalho fica registrado sem tecla nenhuma e pode
-ser amarrado em Preferências do Sistema → Atalhos → Acessos. Quando isso
-acontece, os Ajustes mostram o aviso logo abaixo da caixa do atalho — antes
-ele só saía no terminal, que ninguém lê quando o app foi aberto pelo menu.
-
-No Windows quem amarra a tecla é o próprio app, com `RegisterHotKey`: sem
-portal, sem diálogo de confirmação e sem precisar do serviço — não há
-sessão para morrer junto com o processo, então o atalho só existe com o
-app aberto.
-
-## Windows
-
-O mesmo código-fonte gera o executável e o instalador do Windows, a partir
-do Linux, numa passada só:
-
-```bash
-scripts/build-windows.sh               # build/win/dist/ (acessos.exe + DLLs)
-scripts/build-windows.sh --instalador  # build/win/AcessosSetup-<versão>.exe
-scripts/build-windows.sh --limpar      # apaga build/win/
-```
-
-Nada precisa ser instalado no sistema e nada pede root: o script **mede o
-runtime C do cross-compiler** e monta um sysroot MinGW com os pacotes
-binários do MSYS2 do mesmo sabor (`scripts/sysroot-msys2.py`, repositório
-`ucrt64` ou `mingw64`), gera o ícone a partir do mesmo SVG do Linux,
-compila com cgo (VNC e RDP ligados), **confere que o `.exe` e as DLLs
-ficaram no mesmo runtime** (`scripts/crt-windows.sh`), resolve
-**recursivamente** as DLLs de que o `.exe` depende
-(`scripts/dlls-windows.py`) e, no `--instalador`, compila
-`scripts/instalador.iss` com o Inno Setup rodando num prefixo Wine próprio,
-em `build/win/wine` — o `~/.wine` do usuário fica intocado.
-
-A medição do runtime C não é zelo: os dois sabores têm heaps separados, e
-o pacote da v2.7.1 saiu com o `.exe` em `msvcrt` e as DLLs em `UCRT` — toda
-sessão VNC morria ao conectar, num `free()` que devolvia ao heap errado a
-memória alocada dentro da `libvncclient`. O build falha hoje se isso se
-repetir.
-
-O instalador não pede administrador: instala em
-`%LOCALAPPDATA%\Acessos`, com atalho no Menu Iniciar e (opcional) na Área
-de Trabalho. O inventário fica em `%APPDATA%\acessos\conexoes.ini`.
-
-Diferenças em relação ao Linux: a sonda de vida usa `IcmpSendEcho` do
-`iphlpapi` no lugar do socket ICMP sem privilégio, e o app grava
-`log.txt`/`freerdp.log` ao lado do `conexoes.ini` (compilado como
-aplicativo gráfico, ele não tem stdout).
-
-Tela, mouse, teclado e área de transferência funcionam nas sessões
-remotas do Windows (VNC e RDP testados; SSH usa o mesmo caminho). Layout
-de teclado assumido é US — ver limitações no item 1 do
-[BACKLOG.md](BACKLOG.md).
-
-## Estrutura
-
-```
-cmd/acessos/          a aplicação (interface, abas, diálogos)
-internal/
-  vnc/ rdp/           clientes próprios, cgo sobre libvncclient e libfreerdp3
-  grab/               teclado, área de transferência e inibição de atalhos
-                      por Wayland direto
-  conexoes/           leitura e gravação cirúrgica do conexoes.ini
-  cofre/ chaveiro/    senhas cifradas e credenciais reutilizáveis
-  massa/              execução em lote (portado do Mass SSH Executer)
-  hostkey/ vida/      identidade do servidor SSH e sonda de vida
-scripts/              build para Windows: sysroot MSYS2, DLLs, instalador
-third_party/gio/      Gio com três patches — veja PATCH.md
-flatpak/              manifesto, .desktop e metainfo
-```
-
-Os comandos em `cmd/` que não são `acessos` são ferramentas de teste
-manual de cada protocolo, usadas durante o porte.
-
-## Licença
-
-GNU GPLv3 — veja [LICENSE](LICENSE).

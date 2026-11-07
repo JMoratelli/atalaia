@@ -10,54 +10,49 @@
   </developer>
   <description>
     <p>
-      Acessos reune VNC, RDP, SSH e transferencia de arquivos por SFTP em
-      abas, com clientes proprios de RDP (sobre libfreerdp3) e VNC (sobre
-      libvncclient), ambos falando com a biblioteca C direto — sem GObject
-      Introspection nem processos externos — para evitar os congelamentos
-      de interface do gtk-vnc/gtk-frdp.
+      O Atalaia Acessos junta numa janela só o que o suporte usa para chegar
+      nas máquinas: a tela (VNC), a área de trabalho do Windows (RDP), o
+      terminal (SSH) e os arquivos (SFTP), cada máquina numa aba. Os clientes
+      de RDP e VNC são próprios, sobre a libfreerdp3 e a libvncclient, falando
+      com a biblioteca C direto, sem processos externos.
     </p>
     <p>Recursos:</p>
     <ul>
-      <li>VNC, RDP, SSH e SFTP em abas na mesma janela</li>
-      <li>RDP embutido com ajuste dinamico de resolucao e clipboard de
-        texto sincronizado</li>
-      <li>Identidade do servidor sempre confirmada pelo operador —
-        certificado RDP e chave SSH pelo known_hosts, nunca aceitos
-        automaticamente</li>
-      <li>Terminal SSH embutido com biblioteca de snippets ao lado</li>
-      <li>Transferencia de arquivos via SFTP, com arrastar entre painel
-        local e remoto</li>
-      <li>Execucao de comandos em varias maquinas de uma vez, com canario
-        obrigatorio de 3 maquinas antes do lote</li>
-      <li>Senhas salvas cifradas (cofre) e credenciais reutilizaveis
-        apontadas por alias (chaveiro)</li>
+      <li>Painel com todas as máquinas em grupos, mostrando quem está respondendo</li>
+      <li>VNC, RDP, SSH e SFTP em abas na mesma janela, e o RDP também em janela própria</li>
+      <li>Terminal SSH com a biblioteca de snippets ao lado</li>
+      <li>Transferência de arquivos por SFTP, arrastando entre esta máquina e a remota</li>
+      <li>O mesmo comando em várias máquinas de uma vez, testado antes em três</li>
+      <li>Busca de qualquer lugar com Ctrl+Shift+F12, mesmo com o app fechado</li>
+      <li>Senhas cifradas por uma senha mestra e credenciais compartilhadas por apelido</li>
+      <li>Chave SSH e certificado RDP sempre confirmados por quem conecta, nunca aceitos sozinhos</li>
     </ul>
   </description>
   <launchable type="desktop-id">org.jj.Acessos.desktop</launchable>
   <screenshots>
     <screenshot type="default">
       <image>https://raw.githubusercontent.com/JMoratelli/atalaia/master/screenshots/principal.png</image>
-      <caption>Painel principal com o resumo dos acessos cadastrados</caption>
+      <caption>Painel com as máquinas agrupadas e o resumo do inventário</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/JMoratelli/atalaia/master/screenshots/vnc.png</image>
-      <caption>Sessao VNC embutida em aba</caption>
+      <caption>Sessão VNC embutida em aba</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/JMoratelli/atalaia/master/screenshots/ssh.png</image>
-      <caption>Terminal SSH embutido com biblioteca de snippets</caption>
+      <caption>Terminal SSH com a biblioteca de snippets ao lado</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/JMoratelli/atalaia/master/screenshots/sftp.png</image>
-      <caption>Transferencia de arquivos via SFTP em duas colunas</caption>
+      <caption>Transferência de arquivos por SFTP em duas colunas</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/JMoratelli/atalaia/master/screenshots/execucao-massa.png</image>
-      <caption>Execucao de comandos em varias maquinas de uma vez</caption>
+      <caption>O mesmo comando em várias máquinas de uma vez</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/JMoratelli/atalaia/master/screenshots/snippets.png</image>
-      <caption>Editor de snippets de comandos reutilizaveis</caption>
+      <caption>Editor da biblioteca de snippets</caption>
     </screenshot>
   </screenshots>
   <url type="homepage">https://github.com/JMoratelli/atalaia</url>
