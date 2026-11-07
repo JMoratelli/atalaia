@@ -249,8 +249,40 @@
   anterior às falhas, então "estamos na versão mais nova" e "estamos sem
   as correções" eram verdade ao mesmo tempo.
 
-  - **Última checagem: 2026-10-17.** Próxima: a partir de 2026-11-17.
-  - Resultado: **FreeRDP tem 3.32.0 (23/09), 3.32.1 (28/09) e 3.32.2
+  - **Última checagem: 2026-11-07** (pedida, fora do ciclo). Próxima: a
+    partir de 2026-12-07. Três achados que pedem providência, nenhum
+    aplicado ainda:
+    - **O instalador do Windows NÃO tem os patches de CVE do
+      libvncclient.** Os patches de `flatpak/patches/libvncserver/` só
+      entram no Flatpak; o Windows leva o `libvncclient.dll` pronto do
+      MSYS2 (`libvncserver-0.9.15-3` no sysroot), cujo PKGBUILD não
+      aplica nenhum deles. Ficam de fora CVE-2026-32853 e as duas altas
+      (CVE-2026-44988, CVE-2026-50538). Saída: compilar o libvncclient
+      no `build-windows.sh` a partir do tarball, com os mesmos patches.
+      Mesma armadilha de arquivo irmão de sempre, só que entre os dois
+      pacotes.
+    - **O Flatpak compila com Go 1.27.1**: a extensão golang do runtime
+      25.08 parou nela (02/09); só a 26.08 recebe a 1.27.3. A 1.27.1 tem
+      CVEs da biblioteca padrão que tocam o atualizador por HTTPS
+      (GO-2026-6809 em crypto/x509, GO-2026-6607 em crypto/tls,
+      GO-2026-6605 em net/http). O Windows usa o Go local (1.27.3) e está
+      em dia. Saídas: runtime 26.08 (recompila FreeRDP/libvnc/krb5) ou um
+      Go oficial declarado como fonte no manifesto.
+    - **FreeRDP 3.33.0 (02/11)** corrige 13 advisories ainda em sigilo e
+      promete uma 3.33.1 para regressões; esperar a 3.33.1 (ou ir para a
+      3.33.0 com teste em host real se sair advisory crítico do lado
+      cliente). O MSYS2 já serve a 3.33.0: apagar `build/win/sysroot`
+      agora traz ela sem querer, com o Flatpak na 3.32.2.
+    - Menores: pkg/sftp 1.13.12 (endurece o parser do cliente), godbus
+      5.2.4 (panic e alocação por comprimento vindo de fora), x/image
+      0.47 (9 vulns no tiff, que entra pelo go-text; risco baixo, fontes
+      locais) — baratos, vão juntos numa próxima. x/crypto 0.58, x/net
+      0.62, x/sys, x/term sem nada que nos afete. Gio sem tag nova, mas o
+      main tem a correção da tecla morta no xkb (`fd8b878890`; o nosso
+      `app/internal/xkb/xkb_unix.go` alimenta o compose também na tecla
+      SOLTA, o que come acentos nos campos de texto do Linux) — vale um
+      cherry-pick. libvncserver, vt10x e go-text sem novidade.
+  - Checagem de 2026-10-17. Resultado: **FreeRDP tem 3.32.0 (23/09), 3.32.1 (28/09) e 3.32.2
     (12/10)**, e o manifesto Flatpak e o sysroot MSYS2 estão em 3.31.1.
     As três são rodadas de endurecimento contra servidor malicioso, com
     dezenas de CVEs — várias do lado CLIENTE (use-after-free numa PDU
