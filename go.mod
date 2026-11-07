@@ -1,9 +1,9 @@
 module acessos-go
 
-// A versão aqui tem de caber no toolchain do SDK do Flatpak (extensão
-// golang do runtime 25.08 = Go 1.27.1), porque o build roda OFFLINE com
-// GOTOOLCHAIN=local: pedir versão maior faria o Go tentar baixar o
-// toolchain e falhar sem rede.
+// A versão aqui tem de caber no Go que o manifesto do Flatpak declara
+// como fonte (go-sdk, hoje 1.27.3; ver flatpak/org.jj.Acessos.yml),
+// porque o build roda OFFLINE com GOTOOLCHAIN=local: pedir versão maior
+// faria o Go tentar baixar o toolchain e falhar sem rede.
 go 1.26.0
 
 require (
@@ -11,12 +11,12 @@ require (
 	gioui.org v0.10.3
 	gioui.org/x v0.10.3
 	github.com/go-text/typesetting v0.3.5
-	github.com/godbus/dbus/v5 v5.2.2
+	github.com/godbus/dbus/v5 v5.2.4
 	github.com/hinshun/vt10x v0.0.0-20220301184237-5011da428d02
-	github.com/pkg/sftp v1.13.11
+	github.com/pkg/sftp v1.13.12
 	golang.org/x/crypto v0.57.0
 	golang.org/x/net v0.59.0
-	golang.org/x/sys v0.48.0
+	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.46.0
 )
 
@@ -26,8 +26,8 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
-	golang.org/x/image v0.26.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/image v0.47.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
 
 replace gioui.org => ./third_party/gio

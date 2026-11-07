@@ -18,21 +18,25 @@
 # golang.org/x/* atuais exigem Go 1.26, e a extensão golang do 24.08 traz
 # 1.25. Rebaixar as libs para caber no runtime velho seria abrir mão de
 # correções de segurança do x/crypto — o caminho certo é o runtime novo.
+#
+# O Go NÃO vem mais da extensão golang do SDK (desde a 2.9.2): a do 25.08
+# parou na 1.27.1 em 2026-09-02 (só a branch 26.08 recebe correção), e a
+# 1.27.1 tem CVEs da biblioteca padrão que tocam o atualizador por HTTPS
+# (crypto/x509, crypto/tls, net/http). O toolchain oficial do go.dev entra
+# como fonte do módulo do app, com o sha256 publicado lá, e é usado só no
+# build (não vai para /app). Para trocar de versão: a URL e o sha256 dos
+# dois arch, em https://go.dev/dl/?mode=json.
 
 app-id: org.jj.Acessos
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
-sdk-extensions:
-  - org.freedesktop.Sdk.Extension.golang
 command: acessos
 
 build-options:
-  # a extensão do Go não entra no PATH sozinha
-  append-path: /usr/lib/sdk/golang/bin
   env:
     GOFLAGS: -mod=vendor
-    # nunca baixar toolchain: o build é offline e a versão do SDK serve
+    # nunca baixar toolchain: o build é offline e o Go vem das fontes
     GOTOOLCHAIN: local
     # sem cache gravável fora do build, o Go tenta escrever em $HOME
     GOCACHE: /run/build/acessos-go/.gocache
@@ -134,7 +138,9 @@ modules:
     # dependências (o Gio vendorizado inclusive), então o build é offline —
     # que é o exigido pelo Flathub e o que garante build reprodutível.
     build-commands:
-      - go build -v -o acessos ./cmd/acessos
+      # O Go oficial que vem nas fontes abaixo (go-sdk/), e não um do PATH.
+      - go-sdk/bin/go version
+      - go-sdk/bin/go build -v -o acessos ./cmd/acessos
       - install -Dm755 acessos /app/bin/acessos
       - install -Dm644 flatpak/org.jj.Acessos.desktop
         /app/share/applications/org.jj.Acessos.desktop
@@ -143,6 +149,18 @@ modules:
       - install -Dm644 icones/acessos.svg
         /app/share/icons/hicolor/scalable/apps/org.jj.Acessos.svg
     sources:
+      - type: archive
+        url: https://go.dev/dl/go1.27.3.linux-amd64.tar.gz
+        sha256: 65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40
+        dest: go-sdk
+        only-arches:
+          - x86_64
+      - type: archive
+        url: https://go.dev/dl/go1.27.3.linux-arm64.tar.gz
+        sha256: a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49
+        dest: go-sdk
+        only-arches:
+          - aarch64
       - type: dir
         path: ..
         # go.work é conveniência local do editor (veja .gitignore) e nunca

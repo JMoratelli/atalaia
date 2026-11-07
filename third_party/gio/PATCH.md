@@ -378,3 +378,13 @@ campo e cresce quando a busca acha uma máquina:
   marca `tamanhoPedido` e o `draw` seguinte sai como sincronia. Medido no
   KWin: 118 → 182 quando a busca acha uma máquina, como pedido.
 
+Um patch trazido do upstream (2026-11-07), sem tag ainda:
+
+- **Tecla morta no xkb** — o commit `fd8b878890` do main do Gio
+  ("app/internal/xkb: don't advance the compose state on key release"),
+  aplicado como veio em `app/internal/xkb/xkb_unix.go`. O `DispatchKey`
+  alimentava a composição também ao SOLTAR a tecla, e o soltar da tecla
+  morta consumia o acento antes da letra seguinte: nos campos de texto do
+  app no Linux, ´ e ~ só saíam digitando muito rápido. No próximo rebase,
+  se a versão nova já tiver o commit, este item sai daqui.
+
