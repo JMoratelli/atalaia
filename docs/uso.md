@@ -76,6 +76,27 @@ O menu **Teclas** envia combinações que o computador local pegaria para si:
 A área de transferência de texto é compartilhada com a tela e o RDP: copiar de
 um lado e colar do outro funciona nos dois sentidos.
 
+### Terminal (SSH)
+
+- **Clique** leva o cursor até onde se clicou: no nano, no vim e em outros
+  programas de tela cheia, até a linha e a coluna; no prompt do shell, só
+  na mesma linha (seta para cima puxaria o histórico). Quando o programa
+  pede o mouse (htop, mc, nano com `set mouse`), o clique vai para ele.
+- **Duplo clique** marca a palavra (um caminho, um IP ou um usuário@máquina
+  inteiros), **triplo clique** marca a linha, e arrastar marca um trecho.
+- **Botão direito** traz Copiar, Colar e Copiar a tela inteira.
+  `Ctrl+Shift+C` e `Ctrl+Shift+V` também copiam e colam.
+- **Colar várias linhas** num programa que não protege a colagem pergunta
+  antes, mostrando o começo do texto: no shell, cada linha roda como
+  comando assim que chega.
+- **A roda do mouse** rola o histórico; em programa de tela cheia (nano,
+  less, man) ela anda pelo texto, como as setas. `Ctrl+roda` muda o tamanho
+  da letra.
+
+A sessão manda um sinal de vida a cada 30 segundos. Rede de loja costuma
+derrubar conexão parada sem avisar; sem resposta a três sinais seguidos, a
+aba mostra que a conexão caiu e oferece o Reconectar. O SFTP faz o mesmo.
+
 ### Arquivos (SFTP)
 
 ![SFTP](../screenshots/sftp.png)

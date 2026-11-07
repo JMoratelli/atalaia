@@ -50,7 +50,8 @@ Roda no Linux (Flatpak) e no Windows, a partir do mesmo código.
 ## Telas
 
 **Terminal SSH**, com os snippets ao lado: um clique manda o comando para a
-sessão.
+sessão. Clicar no texto leva o cursor até ali (no nano e no vim também),
+duplo clique marca a palavra e o botão direito copia e cola.
 
 ![Terminal SSH num servidor de arquivos, com a lista de snippets à direita](screenshots/ssh.png)
 
@@ -64,7 +65,8 @@ dela), ou dê dois cliques no arquivo.
 
 ![Dois arquivos sendo arrastados para a pasta backups do servidor](screenshots/sftp.png)
 
-**Execução em massa.** O comando roda primeiro em três máquinas; só depois
+**Execução em massa.** A colmeia mostra o lote inteiro de relance, um favo
+por máquina na cor do estado. O comando roda primeiro em três máquinas; só depois
 que você confere o resultado ele segue para as outras, uma por vez ou em
 paralelo.
 

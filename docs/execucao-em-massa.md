@@ -23,8 +23,16 @@ marcadas.
   estiver escrito ali conta como o último comando da fila, mesmo sem clicar em
   **+ somar à fila**.
 
-À direita fica cada máquina, com o estado, a primeira linha da saída e o tempo
-que levou. Clicar numa linha mostra a saída inteira.
+À direita, no alto, o cartão da execução diz o que está rodando, em que pé
+está (rodando, testado em 3, parado numa falha, concluída em quanto tempo) e
+conta OK, falha, sem conexão e o que falta. Dentro dele fica a colmeia: um
+favo por máquina, na cor do estado — pulsando em azul enquanto roda, verde
+com ✓, vermelho com × na falha, âmbar na sem conexão. Ela mostra um lote de
+centenas de máquinas de relance; passar o mouse num favo diz qual máquina é,
+e clicar abre a saída dela.
+
+Embaixo, cada máquina numa linha, com o mesmo favo, a primeira linha da
+saída e o tempo que levou. Clicar numa linha também mostra a saída inteira.
 
 ## Credenciais
 
