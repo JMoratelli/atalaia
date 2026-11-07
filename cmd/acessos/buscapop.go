@@ -740,7 +740,9 @@ func (j *janelaBusca) linha(i int, cx conexoes.Conexao, avulso bool) layout.Widg
 						// A linha escolhida é a que o Enter abre: pintada
 						// com a folha e contornada, como a aba ativa e o
 						// item ativo da lateral — o mesmo "é este" do app.
-						superficie(gtx, size, tema.Pagina, tema.Contorno, 8)
+						// A folha vai translúcida: sólida, ela tampava o
+						// vidro da caixa quase inteiro.
+						superficie(gtx, size, comAlfa(tema.Pagina, 0.72), tema.Contorno, 8)
 					}
 					return layout.Dimensions{Size: size}
 				}),

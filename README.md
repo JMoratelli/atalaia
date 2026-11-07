@@ -75,6 +75,11 @@ plataforma e a indicação de quem precisa de root.
 
 ![Editor de snippets](screenshots/snippets.png)
 
+**`Ctrl+Shift+F12`**, de qualquer lugar: a caixa aparece por cima do que
+estiver na tela, e a máquina escolhida abre numa aba.
+
+![Caixa de busca do atalho global sobre o Painel](screenshots/busca.png)
+
 Enquanto uma conexão abre, os favos pulsam em volta do ícone do protocolo;
 se ela falha, viram um × vermelho.
 

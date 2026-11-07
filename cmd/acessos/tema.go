@@ -127,8 +127,10 @@ var temaClaro = Tema{
 	Vidro1: rgba(0xffffff, 0.70), Vidro2: rgba(0xffffff, 0.78), Vidro3: rgba(0xffffff, 1.00),
 	VidroTinta: rgba(0xffffff, 0.52), VidroTintaH: rgba(0xffffff, 0.80),
 	// Busca no tom da Moldura (2.9): a caixa do atalho é um pedaço do
-	// topo do app flutuando, e não mais um vidro cinza à parte.
-	BuscaVidro: rgba(0xd9e1ec, 0.90), BuscaFosco: rgba(0xd9e1ec, 0.70),
+	// topo do app flutuando, e não mais um vidro cinza à parte. Os alfas
+	// da 2.9.0 (0,90 e 0,70) deixavam a caixa praticamente opaca, e ela
+	// tem de continuar lendo como vidro sobre o desktop (2.9.1).
+	BuscaVidro: rgba(0xd9e1ec, 0.84), BuscaFosco: rgba(0xd9e1ec, 0.56),
 	// Borda do card em repouso: era 11%, quase se perdia contra o fundo —
 	// ver o relato de bordas "dissolvendo" no tema claro.
 	LuzB:  rgba(0x11161a, 0.17),
@@ -217,7 +219,7 @@ var temaEscuro = Tema{
 	// contraste do texto secundário em cima do card.
 	Vidro1: rgba(0xffffff, 0.045), Vidro2: rgba(0xffffff, 0.075), Vidro3: rgba(0xffffff, 0.13),
 	VidroTinta: rgba(0xffffff, 0.030), VidroTintaH: rgba(0xffffff, 0.075),
-	BuscaVidro: rgba(0x0b0e13, 0.82), BuscaFosco: rgba(0x0b0e13, 0.62),
+	BuscaVidro: rgba(0x0b0e13, 0.74), BuscaFosco: rgba(0x0b0e13, 0.46),
 	// A borda do card em repouso era branco puro translúcido — sobre fundo
 	// quase preto isso lê como BRILHO, não como borda de material. Um
 	// azul-acinzentado neutro em vez de branco resolve isso sem mudar o

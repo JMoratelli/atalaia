@@ -1,5 +1,7 @@
 # Atalho global (`Ctrl+Shift+F12`)
 
+![A caixa de busca sobre o Painel](../screenshots/busca.png)
+
 `Ctrl+Shift+F12` abre uma caixa de busca pequena por cima do que estiver na
 tela, sem precisar ir até a janela do programa. Digite parte do nome, do
 endereço, do grupo ou da descrição da máquina e escolha: ela abre numa aba

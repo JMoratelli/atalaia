@@ -266,6 +266,13 @@ type window struct {
 	desfoqueRaio   int
 	desfoqueEscala int
 	// --- fim do patch ---
+
+	// --- patch acessos: tamanho pedido pelo app (ver PATCH.md) ---
+	// tamanhoPedido marca que o app trocou o tamanho da janela por
+	// app.Size: o próximo quadro tem de ser de sincronia, que é o único
+	// que redimensiona a superfície da GPU (Refresh).
+	tamanhoPedido bool
+	// --- fim do patch ---
 }
 
 type poller struct {
@@ -1362,6 +1369,9 @@ func (w *window) Configure(options []Option) {
 			w.config.Size = cnf.Size
 			w.config.Size.Y += int(w.decoHeight()) * w.scale
 			w.size = w.config.Size.Div(w.scale)
+			// --- patch acessos: tamanho pedido pelo app ---
+			w.tamanhoPedido = true
+			// --- fim do patch ---
 		}
 		w.config.MinSize = cnf.MinSize
 		w.config.MaxSize = cnf.MaxSize
@@ -2365,6 +2375,16 @@ func (w *window) draw(sync bool) {
 	if !w.configured {
 		return
 	}
+	// --- patch acessos: tamanho pedido pelo app (ver PATCH.md) ---
+	// Sem isto o quadro sai no tamanho novo, mas a superfície da GPU fica
+	// no antigo: só o quadro de sincronia chama o Refresh, e ele só vinha
+	// de um configure do compositor. A janela não crescia e o desenho,
+	// maior que ela, perdia o topo.
+	if w.tamanhoPedido {
+		w.tamanhoPedido = false
+		sync = true
+	}
+	// --- fim do patch ---
 	w.flushScroll()
 	size, cfg := w.getConfig()
 	if cfg == (unit.Metric{}) {

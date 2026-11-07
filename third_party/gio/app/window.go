@@ -800,6 +800,16 @@ func (w *Window) init() {
 	w.initialOpts = nil
 	var cnf Config
 	cnf.apply(unit.Metric{}, options)
+	// --- patch acessos: decoração na criação (ver PATCH.md) ---
+	// Janela sem decoração não ganha as decorações de reserva do Gio
+	// (fallbackDecorate exige enabled), então a altura delas não pode
+	// entrar no tamanho. O Window.Option já zera isso; a criação não
+	// zerava, e a janela nascia com a altura pedida mais a da barra que
+	// ninguém desenha.
+	if !cnf.Decorated {
+		options = append(options, decoHeightOpt(0))
+	}
+	// --- fim do patch ---
 
 	w.nocontext = cnf.CustomRenderer
 	w.decorations.Theme = theme

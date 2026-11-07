@@ -353,3 +353,28 @@ Um patch de teclado no Windows (2026-11-06):
   tecla virtual (0xE045 e 0x45), não pelo `lParam`: os dois têm o
   scancode 0x45, e o SendInput não põe no Num Lock a marca de estendida
   que o teclado físico põe — pelo `lParam`, ele virava Pause.
+
+Dois patches de tamanho de janela no Wayland (2026-11-07), achados na caixa
+do atalho global (`cmd/acessos/buscapop.go`), que nasce do tamanho de um
+campo e cresce quando a busca acha uma máquina:
+
+- **Decoração na criação** (`app/window.go`, em `init`). A criação da
+  janela passava ao driver a altura das decorações de reserva do Gio
+  (`decoHeightOpt`) mesmo com `app.Decorated(false)`, e o Configure do
+  Wayland soma essa altura ao `app.Size` quando a janela não tem
+  decoração do servidor. Só que essas decorações nunca são desenhadas
+  para quem pediu janela sem decoração (`fallbackDecorate` exige
+  `decorations.enabled`), e o `Window.Option` já zerava a altura nas
+  chamadas seguintes. Medido no KWin: a caixa pedia 118 e nascia com 158,
+  com uma faixa vazia embaixo. Agora a criação zera a altura do mesmo
+  jeito quando `Decorated` é falso.
+- **Tamanho pedido pelo app** (`app/os_wayland.go`, `Configure` e
+  `draw`). Um `app.Size` com a janela já aberta trocava `w.size` e o
+  quadro passava a sair no tamanho novo, mas a superfície da GPU só é
+  redimensionada no quadro de sincronia (`Refresh`, em
+  `validateAndProcess`), e no Wayland ele só vinha de um configure do
+  compositor. A janela ficava no tamanho antigo e o desenho, maior que
+  ela, perdia o topo (o GL conta de baixo para cima). Agora o Configure
+  marca `tamanhoPedido` e o `draw` seguinte sai como sincronia. Medido no
+  KWin: 118 → 182 quando a busca acha uma máquina, como pedido.
+

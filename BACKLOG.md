@@ -22,10 +22,11 @@ no "item 1" da busca, se refere à numeração de então; o git conta o que
 era.
 
 1. Sessão remota em várias telas — parado, ver o aviso
-2. Caixa do atalho global com a altura errada no Wayland
 
 Atualizado em 2026-11-07, quando as capturas de tela da 2.x substituíram as
-da versão Python e o item delas saiu.
+da versão Python e o item delas saiu (a altura errada da caixa do atalho
+global, vista ao fazê-las, entrou e saiu no mesmo dia: dois patches no
+fork do Gio, ver `third_party/gio/PATCH.md`).
 
 ---
 
@@ -67,21 +68,3 @@ derrubou sessão: cada mudança remonta as surfaces gfx no servidor
 Trabalho para muito depois. A janela própria SEM várias telas (só
 destacar) é bem mais barata e não depende de nada disto além da captura
 por janela.
-
-## 2. Caixa do atalho global com a altura errada no Wayland
-
-Visto em 2026-11-07, tirando os prints do README no KDE Plasma (Wayland). A
-janela da busca do `Ctrl+Shift+F12` parece não acompanhar o tamanho que
-pede: recém-aberta, sem resultado, sobra uma faixa vazia embaixo do rodapé;
-depois que a busca acha uma máquina e a janela cresce para caber a linha
-(`alturaDesejada`, em `cmd/acessos/buscapop.go`), quem some é o TOPO do
-cartão, com o campo encostando na borda de cima. Nos dois casos o cartão
-visível tem a mesma altura, como se a área mostrada fosse fixa e o conteúdo
-escorregasse dentro dela. Digitar 2,5 s depois de a caixa abrir dá o mesmo
-resultado, então não é corrida com a primeira configuração da janela.
-
-Suspeita a conferir: a geometria da janela (`xdg_surface.set_window_geometry`)
-não acompanhar o `app.Size` pedido depois de a janela existir, com a margem
-transparente em volta do cartão (`buscaMargem`) entrando na conta de um lado e
-não do outro. Conferir também no Windows.
-
