@@ -10,13 +10,15 @@
 comando em centenas de máquinas de uma vez e busca de qualquer lugar. Livre, gratuito, Linux e Windows.**
 
 <!-- os selos do projeto: a versão sai sozinha da última release; testes contados com
-     grep '^func Test' em cmd/ e internal/ — atualizar a cada versão -->
+     grep '^func Test' em cmd/ e internal/, linhas com `go run scripts/linhas-de-codigo.go`
+     (GOWORK=off) — atualizar os dois a cada versão -->
 <p>
   <a href="https://github.com/JMoratelli/atalaia/releases/latest"><img alt="versão" src="https://img.shields.io/github/v/release/JMoratelli/atalaia?style=flat-square&label=vers%C3%A3o&color=5AA2FF"></a>
   <a href="#instalar"><img alt="Linux e Windows" src="https://img.shields.io/badge/sistemas-Linux%20%C2%B7%20Windows-1C211F?style=flat-square"></a>
   <a href="docs/compilar.md"><img alt="226 testes" src="https://img.shields.io/badge/testes-226%20casos-38D9A9?style=flat-square"></a>
+  <a href="scripts/linhas-de-codigo.go"><img alt="36 mil linhas de código" src="https://img.shields.io/badge/c%C3%B3digo-36%20mil%20linhas-66D9E8?style=flat-square"></a>
   <a href="LICENSE"><img alt="licença GPLv3" src="https://img.shields.io/badge/licen%C3%A7a-GPLv3-B197FC?style=flat-square"></a>
-  <a href="#comparação"><img alt="preço: R$ 0" src="https://img.shields.io/badge/pre%C3%A7o-R%24%200-E0B458?style=flat-square"></a>
+  <a href="#comparação"><img alt="preço: gratuito" src="https://img.shields.io/badge/pre%C3%A7o-gratuito-E0B458?style=flat-square"></a>
 </p>
 
 <!-- a stack, com o logo de cada uma (shields.io); mudou uma versão maior, muda aqui -->
@@ -156,17 +158,17 @@ processo nas bibliotecas compartilhadas, sem contar em dobro).</sub>
 
 | | Linux | Windows | VNC, RDP, SSH e SFTP embutidos | Mesmo comando em várias máquinas | Atalho global para achar a máquina | Preço |
 |---|---|---|---|---|---|---|
-| **Atalaia Acessos** | sim | sim | sim | em lote: testa em 3, para na falha e mostra o resultado de cada máquina | sim, também no Linux e com o app fechado | **R$ 0**, livre (GPLv3), sem limite |
-| Remmina | sim | não | sim | não encontramos | não encontramos | grátis, livre (GPLv2+) |
-| MobaXterm | não | sim | sim | replica a digitação (MultiExec) | não encontramos | Home grátis até 12 sessões; Professional US$ 69 por usuário |
-| mRemoteNG | não | sim | VNC, RDP e SSH; SFTP só para enviar arquivo | replica a digitação no SSH | não encontramos | grátis, livre (GPLv2); última versão estável de 2019 |
-| Royal TS | não | sim | sim | sequências de teclas e tarefas em várias conexões | sim, no Windows | grátis até 10 conexões; 49 € por usuário |
-| Devolutions RDM | sim | sim | sim | replica a digitação no SSH | no Windows e no macOS; no Linux só com o app em foco | grátis para uso individual; equipe US$ 400 por usuário por ano |
-| Termius | sim | sim | só SSH e SFTP | snippets em vários hosts | não encontramos | Starter grátis; Pro US$ 10 por mês |
+| **Atalaia Acessos** | sim | sim | sim | em lote: testa em 3, para na falha e mostra o resultado de cada máquina | sim, também no Linux e com o app fechado | gratuito, livre (GPLv3), sem limite |
+| Remmina | sim | não | sim | não encontramos | não encontramos | gratuito, livre (GPLv2+), sem limite |
+| MobaXterm | não | sim | sim | replica a digitação (MultiExec) | não encontramos | Home gratuito até 12 sessões; Professional US$ 69 por usuário |
+| mRemoteNG | não | sim | VNC, RDP e SSH; SFTP só para enviar arquivo | replica a digitação no SSH | não encontramos | gratuito, livre (GPLv2), sem limite; última versão estável de 2019 |
+| Royal TS | não | sim | sim | sequências de teclas e tarefas em várias conexões | sim, no Windows | gratuito até 10 conexões; 49 € por usuário |
+| Devolutions RDM | sim | sim | sim | replica a digitação no SSH | no Windows e no macOS; no Linux só com o app em foco | gratuito para uso individual; equipe US$ 400 por usuário por ano |
+| Termius | sim | sim | só SSH e SFTP | snippets em vários hosts | não encontramos | Starter gratuito; Pro US$ 10 por mês |
 
-O que o Atalaia junta e os outros não juntam: **os quatro protocolos
-embutidos, livre e nos dois sistemas**, sem limite de sessões nem licença por
-pessoa. Na execução em massa, em vez de repetir a digitação em várias abas,
+Livres, gratuitos e sem limite, o Remmina e o mRemoteNG também são. O que o
+Atalaia junta e os outros não juntam: **os quatro protocolos embutidos, livre
+e gratuito, nos dois sistemas**. Na execução em massa, em vez de repetir a digitação em várias abas,
 ele roda o comando como um lote: primeiro em três máquinas, espera você
 conferir, para na falha perguntando o que fazer e mostra o resultado de cada
 máquina na colmeia. E foi feito para o suporte de lojas: Painel com quem está
