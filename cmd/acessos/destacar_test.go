@@ -19,7 +19,6 @@ type abaContaFecha struct {
 }
 
 func (a *abaContaFecha) Title() string { return a.nome }
-func (a *abaContaFecha) SoIcone() bool { return false }
 func (a *abaContaFecha) Pinned() bool  { return a.fixa }
 func (a *abaContaFecha) Close()        { a.fechada++ }
 func (a *abaContaFecha) Selo() (*widget.Icon, color.NRGBA, color.NRGBA) {

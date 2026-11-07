@@ -128,7 +128,7 @@ func (d *dlgChaveiro) Corpo(gtx layout.Context, th *material.Theme) layout.Dimen
 			if cofreAberto == nil {
 				// Sem cofre aberto o chaveiro é só uma lista de nomes: as
 				// senhas estão cifradas e não há como usá-las nem gravá-las.
-				return rotulo(th, fonteMono, spSecundario,
+				return rotulo(th, fonteSans, spRotulo,
 					"Cofre trancado: as senhas estão cifradas e não podem ser usadas nem alteradas.",
 					tema.AtencaoFg)(gtx)
 			}
@@ -144,7 +144,7 @@ func (d *dlgChaveiro) Corpo(gtx layout.Context, th *material.Theme) layout.Dimen
 					gtx.Constraints.Min.X, gtx.Constraints.Max.X = larg, larg
 					return layout.Background{}.Layout(gtx,
 						func(gtx layout.Context) layout.Dimensions {
-							superficie(gtx, gtx.Constraints.Min, tema.Vidro1, tema.Borda, 8)
+							superficie(gtx, gtx.Constraints.Min, tinta(tema.Texto, 0.03), tema.CardBorda, 12)
 							return layout.Dimensions{Size: gtx.Constraints.Min}
 						},
 						func(gtx layout.Context) layout.Dimensions {
@@ -164,7 +164,7 @@ func (d *dlgChaveiro) Corpo(gtx layout.Context, th *material.Theme) layout.Dimen
 			if d.erro == "" {
 				return layout.Dimensions{}
 			}
-			return layout.Inset{Top: 6}.Layout(gtx, rotulo(th, fonteMono, spSecundario, d.erro, tema.ErroFg))
+			return layout.Inset{Top: 6}.Layout(gtx, rotulo(th, fonteSans, spRotulo, d.erro, tema.ErroFg))
 		}),
 		espaco(12),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -193,7 +193,7 @@ func (d *dlgChaveiro) Corpo(gtx layout.Context, th *material.Theme) layout.Dimen
 
 func (d *dlgChaveiro) listaCreds(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	if len(d.arq.Ordem) == 0 {
-		return layout.Center.Layout(gtx, rotulo(th, fonteMono, spCardMeta, "nenhuma credencial ainda", tema.Fraco))
+		return layout.Center.Layout(gtx, rotulo(th, fonteSans, spNota, "nenhuma credencial ainda", tema.Fraco))
 	}
 	return material.List(th, &d.lista).Layout(gtx, len(d.arq.Ordem), func(gtx layout.Context, i int) layout.Dimensions {
 		nome := d.arq.Ordem[i]
@@ -207,7 +207,7 @@ func (d *dlgChaveiro) listaCreds(gtx layout.Context, th *material.Theme) layout.
 					} else if d.btnLinha[i].Hovered() {
 						fundo, borda = tema.Hover, tema.Borda2
 					}
-					superficie(gtx, gtx.Constraints.Min, fundo, borda, 6)
+					superficie(gtx, gtx.Constraints.Min, fundo, borda, 8)
 					return layout.Dimensions{Size: gtx.Constraints.Min}
 				},
 				func(gtx layout.Context) layout.Dimensions {
@@ -249,7 +249,7 @@ func (d *dlgChaveiro) formulario(gtx layout.Context, th *material.Theme) layout.
 	}
 	return layout.Background{}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
-			superficie(gtx, gtx.Constraints.Min, tema.Cartao, tema.Borda, 8)
+			superficie(gtx, gtx.Constraints.Min, tema.Cartao, tema.CardBorda, 12)
 			return layout.Dimensions{Size: gtx.Constraints.Min}
 		},
 		func(gtx layout.Context) layout.Dimensions {
@@ -277,7 +277,7 @@ func (d *dlgChaveiro) formulario(gtx layout.Context, th *material.Theme) layout.
 							// destrói ou falhou.
 							aviso, cor = "cofre trancado: destranque para gravar senha", tema.AtencaoFg
 						}
-						return rotulo(th, fonteMono, spCardMeta, aviso, cor)(gtx)
+						return rotulo(th, fonteSans, spNota, aviso, cor)(gtx)
 					}),
 				)
 			})

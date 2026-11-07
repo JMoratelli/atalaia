@@ -29,11 +29,6 @@ type Tab interface {
 	// Title aparece no rótulo da aba.
 	Title() string
 
-	// SoIcone diz que a aba se representa só pelo ícone (a aba fixa do
-	// Painel é a casinha, sem texto — economiza a largura da tira pras
-	// abas de conexão, que é onde o nome importa).
-	SoIcone() bool
-
 	// Selo é o ícone do protocolo mostrado na aba: o MESMO glifo e a
 	// MESMA cor do card, porque um protocolo tem uma cor só em toda a
 	// interface (gtk.md §6). Devolve ícone, cor do glifo e cor do fundo

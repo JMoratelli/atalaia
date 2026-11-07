@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Acessos
+Name=Atalaia Acessos
 GenericName=Acesso remoto a PDVs
 Comment=VNC, RDP, SSH e SFTP para o parque de PDVs
 Exec=acessos

@@ -188,7 +188,7 @@ func (d *dlgSnippets) Corpo(gtx layout.Context, th *material.Theme) layout.Dimen
 					// tela "opaca". Aqui a coluna tem superfície e borda.
 					return layout.Background{}.Layout(gtx,
 						func(gtx layout.Context) layout.Dimensions {
-							superficie(gtx, gtx.Constraints.Min, tema.Vidro1, tema.Borda, 8)
+							superficie(gtx, gtx.Constraints.Min, tinta(tema.Texto, 0.03), tema.CardBorda, 12)
 							return layout.Dimensions{Size: gtx.Constraints.Min}
 						},
 						func(gtx layout.Context) layout.Dimensions {
@@ -208,7 +208,7 @@ func (d *dlgSnippets) Corpo(gtx layout.Context, th *material.Theme) layout.Dimen
 			if d.erro == "" {
 				return layout.Dimensions{}
 			}
-			return layout.Inset{Top: 6}.Layout(gtx, rotulo(th, fonteMono, spSecundario, d.erro, tema.ErroFg))
+			return layout.Inset{Top: 6}.Layout(gtx, rotulo(th, fonteSans, spRotulo, d.erro, tema.ErroFg))
 		}),
 		espaco(12),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -262,7 +262,7 @@ func (d *dlgSnippets) listaSnips(gtx layout.Context, th *material.Theme) layout.
 					case d.btnLinha[i].Hovered():
 						fundo, borda = tema.Hover, tema.Borda2
 					}
-					superficie(gtx, gtx.Constraints.Min, fundo, borda, 6)
+					superficie(gtx, gtx.Constraints.Min, fundo, borda, 8)
 					return layout.Dimensions{Size: gtx.Constraints.Min}
 				},
 				func(gtx layout.Context) layout.Dimensions {
@@ -299,7 +299,7 @@ func (d *dlgSnippets) listaSnips(gtx layout.Context, th *material.Theme) layout.
 // selinhoPlataforma: linux / windows / ambos, com a mesma cor em todo o
 // app (ambos = neutro, porque vale para os dois).
 func selinhoPlataforma(gtx layout.Context, th *material.Theme, p model.Plataforma) layout.Dimensions {
-	rot, fundo, cor := "univ", tema.Vidro2, tema.Sec
+	rot, fundo, cor := "univ", tinta(tema.Texto, 0.08), tema.Sec
 	switch p {
 	case model.Linux:
 		rot, fundo, cor = "linux", tema.VerdeFraco, tema.Verde
@@ -322,7 +322,7 @@ func selinhoPlataforma(gtx layout.Context, th *material.Theme, p model.Plataform
 func (d *dlgSnippets) editor(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	return layout.Background{}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
-			superficie(gtx, gtx.Constraints.Min, tema.Cartao, tema.Borda, 8)
+			superficie(gtx, gtx.Constraints.Min, tema.Cartao, tema.CardBorda, 12)
 			return layout.Dimensions{Size: gtx.Constraints.Min}
 		},
 		func(gtx layout.Context) layout.Dimensions {

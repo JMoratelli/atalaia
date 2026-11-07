@@ -88,7 +88,7 @@ func TestRolagemDeAltaResolucaoAndaUmaAba(t *testing.T) {
 			Ops: &ops, Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1},
 			Constraints: layout.Exact(image.Pt(800, 40)), Source: r.Source(),
 		}
-		bar.layout(gtx, th)
+		bar.layout(gtx, th, false)
 		r.Frame(gtx.Ops)
 		for _, e := range evs {
 			r.Queue(e)
@@ -113,7 +113,6 @@ func TestRolagemDeAltaResolucaoAndaUmaAba(t *testing.T) {
 type abaFalsa struct{}
 
 func (a *abaFalsa) Title() string { return "aba" }
-func (a *abaFalsa) SoIcone() bool { return false }
 func (a *abaFalsa) Pinned() bool  { return false }
 func (a *abaFalsa) Selo() (*widget.Icon, color.NRGBA, color.NRGBA) {
 	return nil, color.NRGBA{}, color.NRGBA{}

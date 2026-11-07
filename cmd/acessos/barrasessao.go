@@ -4,6 +4,8 @@ import (
 	"image"
 	"image/color"
 
+	"gioui.org/font"
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
@@ -17,7 +19,7 @@ import (
 // da sessão e a geometria. É a mesma barra do app original (a `self.barra`
 // de AbaBase em acessos.py): o operador precisa ver, sem abrir menu
 // nenhum, se a sessão está viva, para onde ela aponta e em que resolução.
-const barraSessaoAltura = unit.Dp(26)
+const barraSessaoAltura = unit.Dp(32)
 
 // estadoSessao é o que a barra mostra à esquerda e à direita. Tipo é uma
 // das chaves de corChip.
@@ -50,183 +52,168 @@ func corChip(tipo string) (fundo, texto color.NRGBA) {
 	return tema.Vidro2, tema.Sec
 }
 
-// layoutBarraSessao desenha a faixa. `extras` são botões de JANELA (tela
-// cheia, devolver a aba), e não da sessão: vão no extremo direito, depois
-// da geometria, separados dos controles da sessão de propósito — um age
-// sobre a máquina remota, o outro sobre a janela que a mostra.
-//
-// A MESMA barra serve a janela principal e a janela destacada. Ela já era
-// "a barrinha fina do topo" pedida: 26dp, com chip de estado, destino e
-// geometria. Duplicá-la para a tela cheia seria criar a segunda cópia de
-// algo que já existe.
+// layoutBarraSessao desenha a barra da sessão. Desde a 2.9 ela não tem
+// fundo próprio: fica na folha, logo abaixo da aba ativa, que desce direto
+// nela — a aba e a barra são uma peça só. Da esquerda para a direita: o
+// estado (pílula), o destino, a geometria e, encostados à direita, os
+// controles da sessão e os extras (tela cheia).
 func layoutBarraSessao(gtx layout.Context, th *material.Theme, a abaSessao,
 	extras ...layout.Widget) layout.Dimensions {
 	h := gtx.Dp(barraSessaoAltura)
 	gtx.Constraints.Min.Y = h
 	gtx.Constraints.Max.Y = h
-	larg := gtx.Constraints.Max.X
-
-	// Translúcida (faixaFosca) e não a cor sólida da tira de abas: o
-	// degradê da janela passa por baixo e a barra deixa de ser uma faixa
-	// chapada entre as abas e a sessão.
-	faixaFosca(gtx, th, image.Pt(larg, h))
-	paint.FillShape(gtx.Ops, tema.Borda, clip.Rect{Min: image.Pt(0, h-1), Max: image.Pt(larg, h)}.Op())
 
 	e := a.EstadoSessao()
-	return layout.Inset{Left: 8, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min.Y = 0
-		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return chipEstado(gtx, th, e.Chip, e.Tipo)
-			}),
-			layout.Rigid(layout.Spacer{Width: 8}.Layout),
-			// O DESTINO é quem cede quando falta largura, e por isso é
-			// Flexed e não Rigid: ele absorve a folga quando sobra espaço
-			// (fazendo o resto encostar à direita, como antes) e encolhe
-			// quando falta, em vez de empurrar os controles e os botões de
-			// janela para fora da barra.
-			//
-			// Era Rigid com um espaçador flexível ao lado, e aí um nome de
-			// máquina longo numa janela estreita zerava a largura de tudo
-			// o que vinha depois — inclusive o ✕, que é o canto que o
-			// operador procura para fechar. Ver barrasessao_test.go.
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				return txt(th, fonteMono, spSecundario, e.Texto, tema.Sec).Layout(gtx)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				if e.Aviso == "" {
-					return layout.Dimensions{}
-				}
-				return layout.Inset{Right: 10}.Layout(gtx,
-					txt(th, fonteMono, spSecundario, e.Aviso, tema.OkFg).Layout)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return a.ControlesSessao(gtx, th)
-			}),
-			layout.Rigid(layout.Spacer{Width: 10}.Layout),
-			layout.Rigid(txt(th, fonteMono, spSecundario, e.Geo, tema.Fraco).Layout),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				if len(extras) == 0 {
-					return layout.Dimensions{}
-				}
-				filhos := make([]layout.FlexChild, 0, len(extras)*2)
-				for _, x := range extras {
-					filhos = append(filhos,
-						layout.Rigid(layout.Spacer{Width: 6}.Layout),
-						layout.Rigid(x))
-				}
-				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.
-					Layout(gtx, filhos...)
-			}),
-		)
-	})
-}
-
-// chipEstado: caixinha de estado. Cor semântica, nunca decorativa — erro
-// só aparece quando a sessão realmente caiu.
-func chipEstado(gtx layout.Context, th *material.Theme, texto, tipo string) layout.Dimensions {
-	fundo, cor := corChip(tipo)
-	return layout.Background{}.Layout(gtx,
-		func(gtx layout.Context) layout.Dimensions {
-			superficie(gtx, gtx.Constraints.Min, fundo, transparente, 5)
-			return layout.Dimensions{Size: gtx.Constraints.Min}
-		},
-		func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: 2, Bottom: 2, Left: 6, Right: 6}.Layout(gtx,
-				negrito(txt(th, fonteMono, spBtnTopo, texto, cor)).Layout)
-		},
-	)
-}
-
-// botaoSessao é o botão de texto da barra ("Reconectar").
-func botaoSessao(gtx layout.Context, th *material.Theme, btn *widget.Clickable, rot string) layout.Dimensions {
-	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Background{}.Layout(gtx,
-			func(gtx layout.Context) layout.Dimensions {
-				fundo, borda := tema.Vidro2, tema.LuzB
-				if btn.Hovered() {
-					fundo, borda = tema.Vidro3, tema.Borda2
-				}
-				superficie(gtx, gtx.Constraints.Min, fundo, borda, 6)
-				return layout.Dimensions{Size: gtx.Constraints.Min}
-			},
-			func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{Top: 3, Bottom: 3, Left: 8, Right: 8}.Layout(gtx,
-					txt(th, fonteMono, spBtnTopo, rot, tema.Sec).Layout)
-			},
-		)
-	})
-}
-
-// toggleSessao é indicador E botão no mesmo controle (gtk.md §6): ligado
-// ganha a cor do assunto, desligado fica apagado. A caixa é a MESMA nos
-// dois estados — estado muda só cor, nunca dimensão.
-func toggleSessao(gtx layout.Context, th *material.Theme, btn *widget.Clickable,
-	ic *widget.Icon, ligado bool, corLigado color.NRGBA) layout.Dimensions {
-
-	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		lado := gtx.Dp(20)
-		gtx.Constraints.Min = image.Pt(lado, lado)
-		gtx.Constraints.Max = image.Pt(lado, lado)
-
-		fundo, borda, cor := transparente, tema.LuzB, tema.Fraco
-		if ligado {
-			fundo, borda, cor = tema.Vidro2, tema.Borda2, corLigado
-		}
-		if btn.Hovered() {
-			fundo = tema.Vidro3
-		}
-		superficie(gtx, image.Pt(lado, lado), fundo, borda, 6)
-		return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return icone(gtx, ic, cor, 13)
+	return layout.Inset{Left: 14, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min.X = gtx.Constraints.Max.X
+		return centroV(gtx, func(gtx layout.Context) layout.Dimensions {
+			return itensBarraSessao(gtx, th, a, e, extras)
 		})
 	})
 }
 
-// segmentado é o grupo de opções exclusivas (Encaixar | 1:1 | Dinâmico),
-// no lugar de um combo: um combo GTK ignorava o tema no app original, e
-// aqui o motivo é o mesmo — três opções cabem na barra e dizem em que
-// estado a sessão está sem precisar abrir nada.
+func itensBarraSessao(gtx layout.Context, th *material.Theme, a abaSessao, e estadoSessao,
+	extras []layout.Widget) layout.Dimensions {
+	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return chipEstado(gtx, th, e.Chip, e.Tipo)
+		}),
+		layout.Rigid(layout.Spacer{Width: 12}.Layout),
+		// Destino e geometria ficam na parte que ENCOLHE (Flexed é medido
+		// depois dos Rigid): numa barra estreita é o texto que se corta,
+		// nunca os botões da direita — entre eles os de janela, o canto que
+		// o operador procura para fechar.
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(txt(th, fonteMono, unit.Sp(12), e.Texto, tema.Texto).Layout),
+				layout.Rigid(layout.Spacer{Width: 12}.Layout),
+				layout.Rigid(txt(th, fonteMono, unit.Sp(11.5), e.Geo, tema.Fraco).Layout),
+			)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if e.Aviso == "" {
+				return layout.Dimensions{}
+			}
+			return layout.Inset{Right: 12}.Layout(gtx,
+				txt(th, fonteMono, spSecundario, e.Aviso, tema.OkFg).Layout)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return a.ControlesSessao(gtx, th)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if len(extras) == 0 {
+				return layout.Dimensions{}
+			}
+			filhos := make([]layout.FlexChild, 0, len(extras)*2)
+			for _, x := range extras {
+				filhos = append(filhos,
+					layout.Rigid(layout.Spacer{Width: 6}.Layout),
+					layout.Rigid(x))
+			}
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.
+				Layout(gtx, filhos...)
+		}),
+	)
+}
+
+// chipEstado é a pílula do estado da sessão: ponto e rótulo na cor do
+// estado, sobre a mesma cor bem clara.
+func chipEstado(gtx layout.Context, th *material.Theme, texto, tipo string) layout.Dimensions {
+	fundo, cor := corChip(tipo)
+	return layout.Background{}.Layout(gtx,
+		func(gtx layout.Context) layout.Dimensions {
+			sz := gtx.Constraints.Min
+			paint.FillShape(gtx.Ops, fundo, clip.UniformRRect(image.Rectangle{Max: sz}, sz.Y/2).Op(gtx.Ops))
+			return layout.Dimensions{Size: sz}
+		},
+		func(gtx layout.Context) layout.Dimensions {
+			alt := gtx.Dp(20)
+			gtx.Constraints.Min.Y, gtx.Constraints.Max.Y = alt, alt
+			return layout.Inset{Left: 8, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return centroV(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							lado := gtx.Dp(7)
+							paint.FillShape(gtx.Ops, cor, clip.Ellipse{Max: image.Pt(lado, lado)}.Op(gtx.Ops))
+							return layout.Dimensions{Size: image.Pt(lado, lado)}
+						}),
+						layout.Rigid(layout.Spacer{Width: 7}.Layout),
+						layout.Rigid(negrito(txt(th, fonteMono, unit.Sp(10), texto, cor)).Layout),
+					)
+				})
+			})
+		},
+	)
+}
+
+// botaoSessao: o botão de texto da barra da sessão ("Reconectar",
+// "Snippets"…), no vidro da folha com borda, 24 de altura — a barra é
+// fina de propósito (quem quiser maior usa o A+, que escala tudo).
+func botaoSessao(gtx layout.Context, th *material.Theme, btn *widget.Clickable, rot string) layout.Dimensions {
+	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		pointer.CursorPointer.Add(gtx.Ops)
+		alt := gtx.Dp(24)
+		gtx.Constraints.Min.Y, gtx.Constraints.Max.Y = alt, alt
+		return layout.Background{}.Layout(gtx,
+			func(gtx layout.Context) layout.Dimensions {
+				fundo := tema.CardTinta
+				if btn.Hovered() {
+					fundo = tema.CardTintaH
+				}
+				superficie(gtx, gtx.Constraints.Min, fundo, tema.CardBorda, 8)
+				return layout.Dimensions{Size: gtx.Constraints.Min}
+			},
+			func(gtx layout.Context) layout.Dimensions {
+				return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Left: 10, Right: 10}.Layout(gtx,
+						txt(th, fonteSansMedia, unit.Sp(12), rot, tema.Texto).Layout)
+				})
+			},
+		)
+	})
+}
+
+// toggleSessao: liga/desliga só de ícone (reconectar sozinho, área de
+// transferência). Ligado, ganha o fundo e o ícone na cor dele.
+func toggleSessao(gtx layout.Context, th *material.Theme, btn *widget.Clickable,
+	ic *widget.Icon, ligado bool, corLigado color.NRGBA) layout.Dimensions {
+
+	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		pointer.CursorPointer.Add(gtx.Ops)
+		size := image.Pt(gtx.Dp(28), gtx.Dp(24))
+		gtx.Constraints.Min, gtx.Constraints.Max = size, size
+
+		fundo, cor := transparente, tema.Fraco
+		if ligado {
+			fundo, cor = comAlfa(corLigado, 0.15), corLigado
+		}
+		if btn.Hovered() && !ligado {
+			fundo, cor = tema.Elevado, tema.Sec
+		}
+		superficie(gtx, size, fundo, transparente, 8)
+		return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return icone(gtx, ic, cor, 15)
+		})
+	})
+}
+
+// segmentado é a escolha exclusiva entre rótulos (modo do VNC, opções dos
+// diálogos): o trilho da repaginação (moldura.go), com o escolhido em
+// relevo.
 func segmentado(gtx layout.Context, th *material.Theme, btns []*widget.Clickable,
 	rotulos []string, escolhido int) layout.Dimensions {
 
-	var filhos []layout.FlexChild
-	for i := range rotulos {
-		i := i
-		filhos = append(filhos, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return btns[i].Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Background{}.Layout(gtx,
-					func(gtx layout.Context) layout.Dimensions {
-						fundo, borda := transparente, transparente
-						switch {
-						case i == escolhido:
-							fundo = tema.Vidro3
-							borda = tema.Borda2
-						case btns[i].Hovered():
-							fundo = tema.Vidro2
-						}
-						superficie(gtx, gtx.Constraints.Min, fundo, borda, 5)
-						return layout.Dimensions{Size: gtx.Constraints.Min}
-					},
-					func(gtx layout.Context) layout.Dimensions {
-						cor := tema.Sec
-						if i == escolhido {
-							cor = tema.Texto
-						}
-						return layout.Inset{Top: 3, Bottom: 3, Left: 7, Right: 7}.Layout(gtx,
-							txt(th, fonteMono, spBtnTopo, rotulos[i], cor).Layout)
-					},
-				)
-			})
-		}))
-	}
-	return layout.Background{}.Layout(gtx,
-		func(gtx layout.Context) layout.Dimensions {
-			superficie(gtx, gtx.Constraints.Min, tema.Vidro1, tema.LuzB, 6)
-			return layout.Dimensions{Size: gtx.Constraints.Min}
-		},
-		func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx, filhos...)
-		},
-	)
+	return trilho(gtx, len(rotulos), escolhido, btns, func(gtx layout.Context, i int, ativo, hover bool) layout.Dimensions {
+		cor := tema.Sec
+		f := fonteSansMedia
+		if ativo {
+			cor = tema.Texto
+			f = fonteSans
+			f.Weight = font.SemiBold
+		} else if hover {
+			cor = tema.Texto
+		}
+		return layout.Inset{Top: 3, Bottom: 3, Left: 10, Right: 10}.Layout(gtx,
+			txt(th, f, unit.Sp(12), rotulos[i], cor).Layout)
+	})
 }

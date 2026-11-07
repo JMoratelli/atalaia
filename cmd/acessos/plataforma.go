@@ -155,7 +155,7 @@ func (d *dlgPlataforma) Corpo(gtx layout.Context, th *material.Theme) layout.Dim
 	d.mu.Unlock()
 
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(rotulo(th, fonteMono, spSecundario,
+		layout.Rigid(rotulo(th, fonteSans, spRotulo,
 			"Lê o banner do SSH. Nenhuma credencial é enviada.", tema.Sec)),
 		espaco(8),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -195,7 +195,7 @@ func (d *dlgPlataforma) Corpo(gtx layout.Context, th *material.Theme) layout.Dim
 		espaco(12),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(rotulo(th, fonteMono, spSecundario,
+				layout.Rigid(rotulo(th, fonteSans, spRotulo,
 					fmt.Sprintf("%d de %d", feitos, len(d.alvos)), tema.Sec)),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return layout.Dimensions{Size: gtx.Constraints.Min}

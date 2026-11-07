@@ -57,7 +57,7 @@ func (d *dlgGrupo) Corpo(gtx layout.Context, th *material.Theme) layout.Dimensio
 	}
 
 	filhos := []layout.FlexChild{
-		layout.Rigid(rotulo(th, fonteMono, spSecundario,
+		layout.Rigid(rotulo(th, fonteSans, spRotulo,
 			fmt.Sprintf("%d máquina(s), subgrupos inclusos", len(d.lista)), tema.Sec)),
 		espaco(10),
 	}

@@ -54,7 +54,11 @@ const (
 // var, não const, só para o teste conseguir apontar para um servidor
 // local — a decodificação da lista é a parte que nenhum teste de unidade
 // de escolher() cobre.
-var urlReleases = "https://api.github.com/repos/JMoratelli/acessos/releases?per_page=30"
+// O repositório foi renomeado de "acessos" para "atalaia" na 2.9. Versões
+// antigas continuam pedindo o endereço velho e funcionam porque o GitHub
+// responde com 301 para o novo e o http.Client padrão segue redirecionamento
+// em GET — não troque o cliente por um que não siga.
+var urlReleases = "https://api.github.com/repos/JMoratelli/atalaia/releases?per_page=30"
 
 // Release é o que a interface precisa mostrar e usar.
 type Release struct {

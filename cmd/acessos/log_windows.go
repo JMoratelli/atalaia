@@ -57,5 +57,5 @@ func iniciarLog(dir string) {
 	if os.Getenv("WLOG_LEVEL") == "" {
 		os.Setenv("WLOG_LEVEL", "INFO")
 	}
-	fmt.Fprintf(os.Stderr, "Acessos %s — log desta execução\n", versaoInstalada())
+	fmt.Fprintf(os.Stderr, "%s %s — log desta execução\n", nomeApp, versaoInstalada())
 }

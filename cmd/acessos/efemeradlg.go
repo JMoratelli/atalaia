@@ -118,7 +118,7 @@ func (d *dlgEfemera) Corpo(gtx layout.Context, th *material.Theme) layout.Dimens
 	}
 	if d.erro != "" {
 		filhos = append(filhos, espaco(6),
-			layout.Rigid(rotulo(th, fonteMono, spSecundario, d.erro, tema.ErroFg)))
+			layout.Rigid(rotulo(th, fonteSans, spRotulo, d.erro, tema.ErroFg)))
 	}
 	filhos = append(filhos, espaco(14), layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,

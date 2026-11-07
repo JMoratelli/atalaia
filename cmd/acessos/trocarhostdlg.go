@@ -144,7 +144,7 @@ func layoutTrocarHost(gtx layout.Context, th *material.Theme) layout.Dimensions 
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					layout.Flexed(1, negrito(txt(th, fonteCond, spSubgrupo, "Trocar máquina", tema.Texto)).Layout),
+					layout.Flexed(1, negrito(txt(th, fonteTitulo, spSubgrupo, "Trocar máquina", tema.Texto)).Layout),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return d.btnFechar.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							cor := tema.Fraco

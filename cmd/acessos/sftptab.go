@@ -170,7 +170,6 @@ func newSFTPTab(w *app.Window, spec map[string]string) (Tab, error) {
 }
 
 func (t *sftpTab) Title() string { return t.titulo }
-func (t *sftpTab) SoIcone() bool { return false }
 func (t *sftpTab) Pinned() bool  { return false }
 func (t *sftpTab) Selo() (*widget.Icon, color.NRGBA, color.NRGBA) {
 	return icons.ActionDescription, tema.AtencaoFg, tema.AtencaoBg
@@ -982,7 +981,7 @@ func (t *sftpTab) painel(gtx layout.Context, p *painelArquivos, titulo string) l
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 				return layout.Background{}.Layout(gtx,
 					func(gtx layout.Context) layout.Dimensions {
-						superficie(gtx, gtx.Constraints.Min, tema.Vidro1, tema.Borda, 8)
+						superficie(gtx, gtx.Constraints.Min, tinta(tema.Texto, 0.03), tema.CardBorda, 12)
 						return layout.Dimensions{Size: gtx.Constraints.Min}
 					},
 					func(gtx layout.Context) layout.Dimensions {
@@ -1026,9 +1025,9 @@ func (t *sftpTab) listaArquivos(gtx layout.Context, p *painelArquivos) layout.Di
 					case marcado:
 						fundo, borda = tema.AzulFraco, tema.Azul
 					case p.btnItem[i].Hovered():
-						fundo = tema.Vidro2
+						fundo = tinta(tema.Texto, 0.06)
 					}
-					superficie(gtx, gtx.Constraints.Min, fundo, borda, 5)
+					superficie(gtx, gtx.Constraints.Min, fundo, borda, 8)
 					return layout.Dimensions{Size: gtx.Constraints.Min}
 				},
 				func(gtx layout.Context) layout.Dimensions {

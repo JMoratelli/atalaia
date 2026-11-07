@@ -385,7 +385,7 @@ func (s *servico) manterAtalho() {
 			continue
 		case a.Gatilho == "":
 			fmt.Fprintln(os.Stderr, "atalho global registrado SEM TECLA — "+
-				"amarre em Preferências do Sistema → Atalhos → Acessos")
+				"amarre em Preferências do Sistema → Atalhos → Atalaia Acessos")
 		default:
 			fmt.Printf("atalho global: %s\n", a.Gatilho)
 		}

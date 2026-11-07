@@ -172,14 +172,14 @@ func (t *massaTab) faixaPausa(gtx layout.Context) layout.Dimensions {
 	return layout.Inset{Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Background{}.Layout(gtx,
 			func(gtx layout.Context) layout.Dimensions {
-				superficie(gtx, gtx.Constraints.Min, fundo, borda, 8)
+				superficie(gtx, gtx.Constraints.Min, fundo, borda, 12)
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			},
 			func(gtx layout.Context) layout.Dimensions {
 				gtx.Constraints.Min.X = gtx.Constraints.Max.X
 				return layout.Inset{Top: 8, Bottom: 8, Left: 10, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-						layout.Rigid(negrito(txt(th, fonteCond, spCardHost, titulo, tema.Texto)).Layout),
+						layout.Rigid(negrito(txt(th, fonteTitulo, spCardHost, titulo, tema.Texto)).Layout),
 						layout.Rigid(rotulo(th, fonteMono, spCardMeta, detalhe, tema.Sec)),
 						espaco(8),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -210,7 +210,7 @@ func (t *massaTab) botoesPausa(gtx layout.Context, p *pausa, pronto bool, espera
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				gtx = botaoLargura(gtx, 300)
+				gtx = botaoLargura(gtx, 320)
 				base := fmt.Sprintf("Continuar nos %d restantes", p.restantes)
 				if !p.resumo.Falhou {
 					return botaoPrimario(gtx, th, &p.btnSeguir, base)
@@ -233,7 +233,7 @@ func (t *massaTab) botoesPausa(gtx layout.Context, p *pausa, pronto bool, espera
 			return layout.Dimensions{Size: gtx.Constraints.Min}
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			gtx = botaoLargura(gtx, 230)
+			gtx = botaoLargura(gtx, 260)
 			return botao(gtx, th, &p.btnTudo, rotEspera("Continuar sem perguntar"), pesoNeutro, !pronto)
 		}),
 		layout.Rigid(layout.Spacer{Width: 8}.Layout),

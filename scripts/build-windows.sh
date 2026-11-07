@@ -156,11 +156,11 @@ BEGIN
     BLOCK "040904b0"
     BEGIN
       VALUE "CompanyName", "Jurandir Moratelli"
-      VALUE "FileDescription", "Acessos - gerenciador de acesso remoto"
+      VALUE "FileDescription", "Atalaia Acessos - gerenciador de acesso remoto"
       VALUE "FileVersion", "$VERSAO"
       VALUE "InternalName", "acessos"
       VALUE "OriginalFilename", "acessos.exe"
-      VALUE "ProductName", "Acessos"
+      VALUE "ProductName", "Atalaia Acessos"
       VALUE "ProductVersion", "$VERSAO"
     END
   END

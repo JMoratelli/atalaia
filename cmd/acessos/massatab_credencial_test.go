@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"acessos-go/internal/chaveiro"
+	"acessos-go/internal/conexoes"
 )
 
 // TestCredencialDigitadaResolveAlias cobre o bug relatado: um operador
@@ -59,4 +60,40 @@ func TestCredencialDigitadaResolveAlias(t *testing.T) {
 			t.Fatalf("got %+v", c)
 		}
 	})
+}
+
+// TestPrecisaCofre cobre o outro relato da aba Massa: com o cofre trancado
+// e senhas guardadas nele, ela seguia com a credencial da tela em vez de
+// pedir a senha mestra, como abrir uma sessão faz.
+func TestPrecisaCofre(t *testing.T) {
+	antigoCofre, antigoChaveiro := cofreAberto, chaveiroAtual
+	t.Cleanup(func() { cofreAberto, chaveiroAtual = antigoCofre, antigoChaveiro })
+	cofreAberto = nil
+	chaveiroAtual = &chaveiro.Arquivo{
+		Credenciais: map[string]chaveiro.Credencial{
+			"Cifrada": {Usuario: "zanthus", Senha: "enc:v1:qualquercoisa"},
+			"Clara":   {Usuario: "zanthus", Senha: "texto"},
+		},
+		Ordem: []string{"Cifrada", "Clara"},
+	}
+	ssh := func(senha string) conexoes.Conexao {
+		return conexoes.Conexao{Nome: "CAIXA", SSH: conexoes.AcessoSSH{Ligado: true, Porta: 22, Usuario: "zanthus", Senha: senha}}
+	}
+
+	casos := []struct {
+		nome string
+		cxs  []conexoes.Conexao
+		quer bool
+	}{
+		{"senha em texto claro", []conexoes.Conexao{ssh("texto")}, false},
+		{"senha cifrada", []conexoes.Conexao{ssh("enc:v1:abc")}, true},
+		{"credencial do chaveiro cifrada", []conexoes.Conexao{ssh("!Cifrada")}, true},
+		{"credencial do chaveiro em claro", []conexoes.Conexao{ssh("!Clara")}, false},
+		{"uma cifrada no meio de claras", []conexoes.Conexao{ssh("a"), ssh("enc:v1:x"), ssh("b")}, true},
+	}
+	for _, c := range casos {
+		if got := precisaCofre(c.cxs); got != c.quer {
+			t.Errorf("%s: precisaCofre = %v, queria %v", c.nome, got, c.quer)
+		}
+	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/unit"
 	"gioui.org/widget"
@@ -48,15 +49,15 @@ func (p pesoBotao) cores(hover bool) (fundo, borda, texto color.NRGBA) {
 		}
 		return f, transparente, hex(0xffffff)
 	case pesoSutil:
-		f, b := tema.Vidro1, tema.LuzB
+		f, b := transparente, tema.CardBorda
 		if hover {
-			f, b = tema.Vidro2, tema.Borda2
+			f, b = tinta(tema.Texto, 0.06), tema.Borda2
 		}
 		return f, b, tema.Sec
 	default: // neutro
-		f, b := tema.Vidro2, tema.LuzB
+		f, b := tema.Elevado, tema.CardBorda
 		if hover {
-			f, b = tema.Vidro3, tema.Borda2
+			f, b = tema.Hover, tema.Borda2
 		}
 		return f, b, tema.Texto
 	}
@@ -77,7 +78,7 @@ func botao(gtx layout.Context, th *material.Theme, btn *widget.Clickable,
 			// "perigoso, ainda não" sem parecer clicável.
 			return caixaBotao(gtx, th, nil, rot, tema.ErroBg, comAlfa(tema.ErroFg, 0.45), tema.ErroFg)
 		}
-		return caixaBotao(gtx, th, nil, rot, tema.Vidro2, tema.LuzB, tema.Fraco)
+		return caixaBotao(gtx, th, nil, rot, tinta(tema.Texto, 0.04), tema.CardBorda, tema.Fraco)
 	}
 	f0, b0, t0 := peso.cores(false)
 	f1, b1, t1 := peso.cores(true)
@@ -88,15 +89,24 @@ func botao(gtx layout.Context, th *material.Theme, btn *widget.Clickable,
 func caixaBotao(gtx layout.Context, th *material.Theme, btn *widget.Clickable,
 	rot string, fundo, borda, texto color.NRGBA) layout.Dimensions {
 
+	// 36 de altura, raio 10, rótulo em Space Grotesk centrado (a largura
+	// pode vir fixa, de botaoLargura) — a mesma família dos botões da
+	// barra do Painel, um degrau menor por morar dentro de diálogo.
 	conteudo := func(gtx layout.Context) layout.Dimensions {
+		if btn != nil {
+			pointer.CursorPointer.Add(gtx.Ops)
+		}
 		return layout.Background{}.Layout(gtx,
 			func(gtx layout.Context) layout.Dimensions {
-				superficieRelevo(gtx, gtx.Constraints.Min, fundo, borda, 8)
+				superficieRelevo(gtx, gtx.Constraints.Min, fundo, borda, 10)
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			},
 			func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{Top: 7, Bottom: 7, Left: 14, Right: 14}.Layout(gtx,
-					negrito(txt(th, fonteMono, spSecundario, rot, texto)).Layout)
+				gtx.Constraints.Min.Y = gtx.Dp(36)
+				return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Left: 16, Right: 16}.Layout(gtx,
+						negrito(txt(th, fonteSans, unit.Sp(13), rot, texto)).Layout)
+				})
 			},
 		)
 	}
@@ -131,12 +141,12 @@ func botaoIconePerigo(gtx layout.Context, b *widget.Clickable, ic *widget.Icon) 
 	return b.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Background{}.Layout(gtx,
 			func(gtx layout.Context) layout.Dimensions {
-				superficie(gtx, gtx.Constraints.Min, fundo, transparente, 7)
+				superficie(gtx, gtx.Constraints.Min, fundo, transparente, 10)
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			},
 			func(gtx layout.Context) layout.Dimensions {
-				return layout.UniformInset(7).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return icone(gtx, ic, cor, 14)
+				return layout.UniformInset(10).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return icone(gtx, ic, cor, 16)
 				})
 			},
 		)

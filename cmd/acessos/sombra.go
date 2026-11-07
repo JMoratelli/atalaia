@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 	"math"
+	"sync"
 
 	"gioui.org/f32"
 	"gioui.org/layout"
@@ -45,8 +46,8 @@ type elevacao [2]camadaSombra
 var (
 	// elevCard: cards, menus, dicas, listas suspensas.
 	elevCard = elevacao{
-		{dy: 1, sigma: 1.5, alfa: 0.12, alfaEscuro: 0.45},
-		{dy: 5, sigma: 6, spread: -3, alfa: 0.20, alfaEscuro: 0.55},
+		{dy: 1, sigma: 1.5, alfa: 0.15, alfaEscuro: 0.45},
+		{dy: 5, sigma: 6, spread: -3, alfa: 0.26, alfaEscuro: 0.55},
 	}
 	// elevDialogo: diálogos e o cartão do splash, mais altos que tudo.
 	elevDialogo = elevacao{
@@ -123,6 +124,10 @@ type gabaritoSombra struct {
 }
 
 var (
+	// gabaritosMu: a janela destacada da sessão também desenha sombra (o
+	// menu de contexto dela), numa goroutine de quadro própria — mapa sem
+	// trava escrito por duas goroutines é erro FATAL do runtime.
+	gabaritosMu     sync.Mutex
 	gabaritos       = map[chaveSombra]*gabaritoSombra{}
 	gabaritosExatos = map[chaveSombra]*gabaritoSombra{}
 )
@@ -132,6 +137,8 @@ func sombraElev(gtx layout.Context, size image.Point, raioDp unit.Dp, el *elevac
 		return
 	}
 	ch := chaveSombra{el: *el, raio: gtx.Dp(raioDp), pxDp: gtx.Metric.PxPerDp, escuro: tema.Escuro}
+	gabaritosMu.Lock()
+	defer gabaritosMu.Unlock()
 	g := gabaritos[ch]
 	if g == nil {
 		g = novoGabarito(ch, image.Point{})

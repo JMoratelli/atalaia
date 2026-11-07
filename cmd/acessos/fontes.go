@@ -20,7 +20,7 @@ import (
 //     largura zero. Embutindo a Plex de verdade, Go e GTK ficam idênticos,
 //     que é o que o tema.py pede: IBM Plex Sans/Sans Condensed/Mono.
 //
-// ~930 KB no binário. Cada família traz Regular e SemiBold porque o tema usa
+// ~1,3 MB no binário. Cada família traz Regular e SemiBold porque o tema usa
 // peso 600 em nome de card, título e marca.
 //
 //go:embed fontes/IBMPlexSans-Regular.ttf
@@ -40,6 +40,30 @@ var plexMonoRegular []byte
 
 //go:embed fontes/IBMPlexMono-SemiBold.ttf
 var plexMonoSemiBold []byte
+
+// Sora (títulos, números, marca) e Space Grotesk (texto da interface) são
+// as fontes da central do ChamadoJá, trazidas para cá na repaginação da
+// 2.9. Ambas são OFL (licenças em fontes/OFL-*.txt). O Google Fonts só
+// distribui as duas como fonte VARIÁVEL, e o shaper do Gio não escolhe
+// peso por eixo de variação: os arquivos aqui são instâncias fixas (400,
+// 500, 600) tiradas da variável com o fontTools (varLib.instancer). A Plex
+// continua: o terminal e os hosts são Plex Mono, e as duas Plex Sans ficam
+// na coleção como reserva para glifo que as novas não tenham.
+//
+//go:embed fontes/Sora-Regular.ttf
+var soraRegular []byte
+
+//go:embed fontes/Sora-SemiBold.ttf
+var soraSemiBold []byte
+
+//go:embed fontes/SpaceGrotesk-Regular.ttf
+var groteskRegular []byte
+
+//go:embed fontes/SpaceGrotesk-Medium.ttf
+var groteskMedium []byte
+
+//go:embed fontes/SpaceGrotesk-SemiBold.ttf
+var groteskSemiBold []byte
 
 // colecaoFontes monta a coleção que o shaper usa. Os nomes aqui têm que
 // bater com os Typeface de tema.go.
@@ -64,6 +88,11 @@ func colecaoFontes() []font.FontFace {
 	add("IBM Plex Sans Condensed", font.SemiBold, plexCondSemiBold)
 	add("IBM Plex Mono", font.Normal, plexMonoRegular)
 	add("IBM Plex Mono", font.SemiBold, plexMonoSemiBold)
+	add("Sora", font.Normal, soraRegular)
+	add("Sora", font.SemiBold, soraSemiBold)
+	add("Space Grotesk", font.Normal, groteskRegular)
+	add("Space Grotesk", font.Medium, groteskMedium)
+	add("Space Grotesk", font.SemiBold, groteskSemiBold)
 	return col
 }
 

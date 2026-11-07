@@ -2,11 +2,9 @@ package main
 
 import (
 	"image"
-	"image/color"
 
 	"gio.tools/icons"
 	"gioui.org/app"
-	"gioui.org/io/pointer"
 	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op/clip"
@@ -16,19 +14,22 @@ import (
 	"gioui.org/widget/material"
 )
 
-const topBarAltura = unit.Dp(30)
+const topBarAltura = unit.Dp(36)
 
 // topBar é a NOSSA titlebar. A decoração do sistema fica desligada
 // (app.Decorated(false)) pra não gastar uma faixa inteira de altura só com
-// o nome da janela: aqui a mesma faixa leva identidade, menu e os botões
-// de janela. É o que o app original faz com a headerbar integrada.
+// o nome da janela: aqui a mesma faixa leva identidade, as ABAS, as
+// ferramentas e os botões de janela.
+//
+// Desde a 2.9 é uma faixa só, na cor da moldura (ver moldura.go). Antes
+// eram três — a barra da janela, a tira de abas e o banner do Painel —,
+// cada uma de um material, e a tela lia como pedaços soltos. As abas
+// subiram para cá, e "nova" e "INI" desceram para a barra do Painel, que é
+// onde se mexe no inventário.
 type topBar struct {
 	menu widget.Clickable
-	// sem botão "início" aqui: a aba fixa da casinha, logo abaixo, JÁ é
-	// esse botão. Dois controles iguais a 30px um do outro só fazem o
-	// operador perguntar qual é a diferença.
-	recarrega widget.Clickable
-	novaConex widget.Clickable
+	// sem botão "início" aqui: a aba fixa do Painel, logo ao lado, JÁ é
+	// esse botão.
 	snippets  widget.Clickable
 	ajustes   widget.Clickable
 	cofre     widget.Clickable
@@ -42,8 +43,6 @@ type topBar struct {
 
 type acoesTopo struct {
 	menu        func()
-	recarregar  func()
-	nova        func()
 	snippets    func()
 	ajustes     func()
 	abrirCofre  func()
@@ -52,21 +51,21 @@ type acoesTopo struct {
 	trocarFonte func()
 }
 
-func (t *topBar) layout(gtx layout.Context, w *app.Window, th *material.Theme, colunaLateral int, a acoesTopo) layout.Dimensions {
+// layout desenha o topo. inicioLinha é onde, em px, começa o fio da base:
+// 0 sem lateral; com ela, depois do canto arredondado da folha (ou na
+// própria borda, quando a aba ativa está colada nela). abas é a tira de
+// abas, desenhada no meio da faixa, a partir da coluna da marca.
+func (t *topBar) layout(gtx layout.Context, w *app.Window, th *material.Theme, inicioLinha int,
+	a acoesTopo, abas layout.Widget) layout.Dimensions {
+
 	for t.menu.Clicked(gtx) {
 		a.menu()
-	}
-	for t.recarrega.Clicked(gtx) {
-		a.recarregar()
 	}
 	for t.cofre.Clicked(gtx) {
 		a.abrirCofre()
 	}
 	for t.chaveiro.Clicked(gtx) {
 		a.chaveiro()
-	}
-	for t.novaConex.Clicked(gtx) {
-		a.nova()
 	}
 	for t.snippets.Clicked(gtx) {
 		a.snippets()
@@ -111,233 +110,155 @@ func (t *topBar) layout(gtx layout.Context, w *app.Window, th *material.Theme, c
 	gtx.Constraints.Max.Y = h
 	largura := gtx.Constraints.Max.X
 
-	fundoTitulo(gtx, image.Pt(largura, h))
-	// Fio de sombra na emenda: tem que ser MAIS ESCURO que as duas faixas.
-	// Com tema.Borda (que no escuro é mais claro que a barra) ele virava
-	// um realce e colava ainda mais as duas.
-	paint.FillShape(gtx.Ops, tema.TituloBorda,
-		clip.Rect{Min: image.Pt(0, h-1), Max: image.Pt(largura, h)}.Op())
+	// O fundo é a própria moldura, já pintada na janela inteira. Só o fio
+	// da base é daqui — e a aba ativa, desenhada depois, passa por cima
+	// dele: é ali que a moldura vira folha.
+	// Com a lateral à vista a linha começa depois do canto arredondado da
+	// folha, que a lateral desenha (contornoFolhaLateral); sobre a coluna
+	// da lateral não há linha — topo e lateral são a mesma moldura.
+	paint.FillShape(gtx.Ops, tema.Contorno,
+		clip.Rect{Min: image.Pt(inicioLinha, h-1), Max: image.Pt(largura, h)}.Op())
 
 	// arrastar a janela pela barra: sem decoração do sistema, é daqui que
-	// o compositor recebe o pedido de mover.
+	// o compositor recebe o pedido de mover. Os botões e as abas, por
+	// cima, ficam com o clique deles.
 	area := clip.Rect{Max: image.Pt(largura, h)}.Push(gtx.Ops)
 	system.ActionInputOp(system.ActionMove).Add(gtx.Ops)
 	area.Pop()
 
-	// Inset 1 à esquerda para o ≡ cair na MESMA coluna da casinha da tira
-	// de abas: os dois são caixas de 24px (ícone de 14 + 5 de respiro de
-	// cada lado) e a primeira aba também começa a 1px da borda, então os
-	// dois glifos ficam com o mesmo centro. Quem se alinha à coluna da
-	// lateral é o texto da marca, logo depois do ≡.
-	return layout.Inset{Left: 1, Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		// Altura mínima ZERO: com Min.Y = altura da barra, cada filho
-		// esticava até o topo e a base e o Alignment: Middle não tinha o
-		// que centralizar — texto, pílulas e botões de janela acabavam em
-		// linhas de base diferentes. Solto, cada um mede o próprio tamanho
-		// e o Middle alinha todos pelo meio da faixa.
-		gtx.Constraints.Min.Y = 0
-		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-			// O bloco da marca ocupa EXATAMENTE a coluna da lateral: o
-			// "Acessos" da barra cai na mesma vertical do cabeçalho da
-			// lateral, e o subtítulo começa junto com a tira de abas.
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				d := layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return botaoIcone(gtx, &t.menu, icons.NavigationMenu, tema.TopoSec, tema.TopoTxt)
-					}),
-					layout.Rigid(layout.Spacer{Width: 4}.Layout),
-					layout.Rigid(negrito(txt(th, fonteCond, spMarcaTopo, "Acessos", tema.TopoTxt)).Layout),
-				)
-				// -4 do inset esquerdo da barra: a conta vai até a BORDA da
-				// lateral, não até onde o texto começa.
-				if col := colunaLateral - gtx.Dp(1); col > d.Size.X {
-					d.Size.X = col
-				} else {
-					// lateral oculta: sem a coluna pra alinhar, ainda assim
-					// o subtítulo não pode encostar na marca.
-					d.Size.X += gtx.Dp(12)
-				}
-				return d
-			}),
-			layout.Rigid(txt(th, fonteMono, spMarcaSub, "VNC · SSH · RDP", tema.TopoSec).Layout),
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				return layout.Dimensions{Size: gtx.Constraints.Min}
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return pilula(gtx, th, &t.novaConex, icons.ContentAdd, "nova")
-			}),
-			layout.Rigid(layout.Spacer{Width: 4}.Layout),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return pilula(gtx, th, &t.snippets, icons.ActionCode, "snippets")
-			}),
-			layout.Rigid(layout.Spacer{Width: 4}.Layout),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return pilula(gtx, th, &t.recarrega, icons.NavigationRefresh, "INI")
-			}),
-			layout.Rigid(layout.Spacer{Width: 4}.Layout),
-			// O cadeado é indicador E botão: aberto = cofre destrancado
-			// nesta sessão, fechado = as senhas cifradas ainda não abrem.
-			// chaveiro: credenciais nomeadas. Fica ao lado do cadeado
-			// porque as duas coisas são o mesmo assunto — o cofre é a
-			// chave, o chaveiro é o que ela abre.
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoIcone(gtx, &t.chaveiro, icons.CommunicationVPNKey, tema.TopoSec, tema.TopoTxt)
-			}),
-			// Só o cadeado: o estado (fechado/aberto) já é o próprio
-			// glifo, e a palavra ao lado não acrescentava nada.
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				ic, cor := icons.ActionLock, tema.TopoSec
-				if cofreAberto != nil {
-					ic, cor = icons.ActionLockOpen, tema.Verde
-				}
-				return botaoIcone(gtx, &t.cofre, ic, cor, tema.TopoTxt)
-			}),
-			layout.Rigid(layout.Spacer{Width: 4}.Layout),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoIcone(gtx, &t.ajustes, icons.ActionSettings, tema.TopoSec, tema.TopoTxt)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoIcone(gtx, &t.tema, icons.ImageBrightness6, tema.TopoSec, tema.TopoTxt)
-			}),
-			// A+ fica junto do tema porque os dois são a mesma pergunta:
-			// como o app se apresenta. O rótulo mostra o nível corrente
-			// (A+, A++) para o clique não ser adivinhação — no nível 0 ele
-			// é só "A+", o convite a aumentar.
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return pilula(gtx, th, &t.fonte, icons.EditorFormatSize, rotuloFonte())
-			}),
-			layout.Rigid(layout.Spacer{Width: 10}.Layout),
-			// Botões de janela com as MESMAS métricas das pílulas — assim a
-			// área de hover deles e a das pílulas ficam na mesma linha
-			// (tema.py faz questão disso).
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoIcone(gtx, &t.minimizar, icons.ContentRemove, tema.TopoSec, tema.TopoTxt)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				ic := icons.ActionOpenInNew
-				if janelaMaximizada {
-					ic = icons.ActionFlipToFront
-				}
-				return botaoIcone(gtx, &t.maximizar, ic, tema.TopoSec, tema.TopoTxt)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoFechar(gtx, &t.fechar)
-			}),
-		)
-	})
-}
-
-// botaoIcone é o botão quadrado só-ícone da barra de topo.
-func botaoIcone(gtx layout.Context, btn *widget.Clickable, ic *widget.Icon, cor, corHover color.NRGBA) layout.Dimensions {
-	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Stack{}.Layout(gtx,
-			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				size := gtx.Constraints.Min
-				// Mão só nos ícones da barra de topo — não em TODO
-				// Clickable do app (isso já foi tentado; em cima de
-				// card/linha de lista virava mão em qualquer hover, e
-				// ficava irritante). Estes são controles discretos, do
-				// tamanho de um ícone, onde a mão faz sentido.
-				pointer.CursorPointer.Add(gtx.Ops)
-				if btn.Hovered() {
-					superficie(gtx, size, tema.VidroH, transparente, 5)
-				}
-				return layout.Dimensions{Size: size}
-			}),
-			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				c := cor
-				if btn.Hovered() {
-					c = corHover
-				}
-				return layout.UniformInset(5).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return icone(gtx, ic, c, 14)
-				})
-			}),
-		)
-	})
-}
-
-// botaoFechar: o único com hover vermelho. Vermelho marca a ação que
-// DESTRÓI — aqui, descartar as sessões abertas.
-func botaoFechar(gtx layout.Context, btn *widget.Clickable) layout.Dimensions {
-	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Stack{}.Layout(gtx,
-			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				size := gtx.Constraints.Min
-				pointer.CursorPointer.Add(gtx.Ops)
-				if btn.Hovered() {
-					superficie(gtx, size, hex(0xd13438), transparente, 5)
-				}
-				return layout.Dimensions{Size: size}
-			}),
-			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				c := tema.TopoSec
-				if btn.Hovered() {
-					c = hex(0xffffff)
-				}
-				return layout.UniformInset(5).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return icone(gtx, icons.NavigationClose, c, 14)
-				})
-			}),
-		)
-	})
-}
-
-// pilula: ícone + rótulo curto em mono, fundo de vidro, hover fixo da
-// paleta. Altura própria, menor que a barra (.btn-topo no tema.py).
-func pilula(gtx layout.Context, th *material.Theme, btn *widget.Clickable,
-	ic *widget.Icon, rot string) layout.Dimensions {
-
-	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Stack{}.Layout(gtx,
-			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				size := gtx.Constraints.Min
-				pointer.CursorPointer.Add(gtx.Ops)
-				fundo, borda := tema.Vidro, tema.VidroB
-				if btn.Hovered() {
-					fundo = tema.VidroH
-				}
-				superficie(gtx, size, fundo, borda, 5)
-				return layout.Dimensions{Size: size}
-			}),
-			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				cor := tema.TopoSec
-				if btn.Hovered() {
-					cor = tema.TopoTxt
-				}
-				return layout.Inset{Top: 3, Bottom: 3, Left: 5, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+		// A marca ocupa a coluna da lateral (aberta): as abas começam junto
+		// com a folha e não se mexem quando a lateral abre e fecha.
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			d := naLinhaDasAbas(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return icone(gtx, ic, cor, 13)
+							return ferramenta(gtx, &t.menu, icons.NavigationMenu, tema.TopoSec)
 						}),
 						layout.Rigid(layout.Spacer{Width: 4}.Layout),
-						layout.Rigid(txt(th, fonteMono, spBtnTopo, rot, cor).Layout),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return marcaApp(gtx, gtx.Dp(20))
+						}),
+						layout.Rigid(layout.Spacer{Width: 8}.Layout),
+						layout.Rigid(negrito(txt(th, fonteTitulo, unit.Sp(14), "Atalaia", tema.TopoTxt)).Layout),
+						layout.Rigid(layout.Spacer{Width: 5}.Layout),
+						layout.Rigid(txt(th, fonteSansMedia, unit.Sp(13.5), "Acessos", tema.TopoSec).Layout),
 					)
 				})
-			}),
-		)
+			})
+			// A coluna da marca tem SEMPRE a largura da lateral aberta, esteja
+			// ela aberta, recolhida ou oculta: as abas não pulam de lugar
+			// quando o F12 abre e fecha a lateral, e com ela aberta a
+			// primeira aba continua em cima da folha. A lateral tem a largura
+			// da marca ("Atalaia Acessos"), então com ela oculta a primeira
+			// aba não fica perdida longe da marca.
+			if col := gtx.Dp(lateralLarga); col > d.Size.X {
+				d.Size.X = col
+			} else {
+				d.Size.X += gtx.Dp(4)
+			}
+			return d
+		}),
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.Y = h
+			// As abas não passam por baixo das ferramentas quando são
+			// muitas: o que não cabe fica cortado aqui.
+			// (o recorte começa abaCurva antes: é onde cai a curva esquerda da
+			// primeira aba, encostada na coluna da marca)
+			defer clip.Rect{Min: image.Pt(-gtx.Dp(abaCurva), 0), Max: image.Pt(gtx.Constraints.Max.X, h)}.Push(gtx.Ops).Pop()
+			d := abas(gtx)
+			d.Size.X = gtx.Constraints.Max.X
+			return d
+		}),
+		// ferramentas e botões de janela no meio da FAIXA (só a marca vai
+		// na linha das abas)
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return noMeioDaFaixa(gtx, func(gtx layout.Context) layout.Dimensions {
+				return capsula(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return ferramenta(gtx, &t.snippets, icons.ActionCode, tema.TopoSec)
+					}),
+					// chaveiro e cofre juntos: o cofre é a chave, o chaveiro é
+					// o que ela abre. O cadeado é indicador E botão: aberto
+					// (verde) = cofre destrancado nesta sessão.
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return ferramenta(gtx, &t.chaveiro, icons.CommunicationVPNKey, tema.TopoSec)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						ic, cor := icons.ActionLock, tema.TopoSec
+						if cofreAberto != nil {
+							ic, cor = icons.ActionLockOpen, tema.Verde
+						}
+						return ferramenta(gtx, &t.cofre, ic, cor)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return divisoria(gtx, tema.Borda2)
+					}),
+					// A+ junto do tema porque os dois são a mesma pergunta:
+					// como o app se apresenta. O rótulo mostra o nível corrente
+					// (A+, A++) para o clique não ser adivinhação.
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return ferramentaTexto(gtx, th, &t.fonte, rotuloFonte())
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return ferramenta(gtx, &t.tema, icons.ImageBrightness6, tema.TopoSec)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return ferramenta(gtx, &t.ajustes, icons.ActionSettings, tema.TopoSec)
+					}),
+				)
+			})
+		}),
+		layout.Rigid(layout.Spacer{Width: 10}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return noMeioDaFaixa(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return divisoria(gtx, tema.MolduraLinha)
+					}),
+					layout.Rigid(layout.Spacer{Width: 4}.Layout),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return botaoJanela(gtx, &t.minimizar, icons.ContentRemove)
+					}),
+					layout.Rigid(layout.Spacer{Width: 2}.Layout),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						ic := icons.ToggleCheckBoxOutlineBlank
+						if janelaMaximizada {
+							ic = icons.ActionFlipToFront
+						}
+						return botaoJanela(gtx, &t.maximizar, ic)
+					}),
+					layout.Rigid(layout.Spacer{Width: 2}.Layout),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return botaoJanelaFechar(gtx, &t.fechar)
+					}),
+					layout.Rigid(layout.Spacer{Width: 6}.Layout),
+				)
+			})
+		}),
+	)
+}
+
+// botaoBarra é o botão de texto das barras de ação ("limpar seleção",
+// "+ somar à fila"): desde a 2.9 o mesmo desenho do botão da barra da
+// sessão (barrasessao.go), para as barras não terem cada uma o seu.
+func botaoBarra(gtx layout.Context, th *material.Theme, btn *widget.Clickable, rot string) layout.Dimensions {
+	return botaoSessao(gtx, th, btn, rot)
+}
+
+// naLinhaDasAbas centraliza w na altura das ABAS, e não na da faixa: as
+// abas ficam encostadas embaixo do topo, e a marca e os botões alinhados
+// pelo meio da faixa inteira ficavam visivelmente acima delas.
+func naLinhaDasAbas(gtx layout.Context, w layout.Widget) layout.Dimensions {
+	gtx.Constraints.Min.Y = gtx.Constraints.Max.Y
+	return layout.Inset{Top: topBarAltura - abaAltura}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return centroV(gtx, w)
 	})
 }
 
-// botaoBarra é o botão de texto das ações da barra de filtro ("recolher
-// tudo", "expandir tudo") — mesma regra: geometria fixa, estado só muda cor.
-func botaoBarra(gtx layout.Context, th *material.Theme, btn *widget.Clickable, rot string) layout.Dimensions {
-	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Stack{}.Layout(gtx,
-			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				size := gtx.Constraints.Min
-				fundo := tema.Vidro2
-				borda := tema.LuzB
-				if btn.Hovered() {
-					fundo, borda = tema.Vidro3, tema.Borda2
-				}
-				superficie(gtx, size, fundo, borda, 7)
-				return layout.Dimensions{Size: size}
-			}),
-			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{Top: 6, Bottom: 6, Left: 10, Right: 10}.Layout(gtx,
-					txt(th, fonteMono, spSecundario, rot, tema.Sec).Layout)
-			}),
-		)
-	})
+// noMeioDaFaixa centraliza w na altura toda do topo.
+func noMeioDaFaixa(gtx layout.Context, w layout.Widget) layout.Dimensions {
+	gtx.Constraints.Min.Y = gtx.Constraints.Max.Y
+	return centroV(gtx, w)
 }

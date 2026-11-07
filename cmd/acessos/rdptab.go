@@ -212,8 +212,7 @@ func (t *rdpTab) Selo() (*widget.Icon, color.NRGBA, color.NRGBA) {
 // EhTelaRemota marca esta aba como tela remota (ver tab.go).
 func (t *rdpTab) EhTelaRemota() {}
 
-func (t *rdpTab) Pinned() bool  { return false }
-func (t *rdpTab) SoIcone() bool { return false }
+func (t *rdpTab) Pinned() bool { return false }
 
 func (t *rdpTab) Close() {
 	t.closeOnce.Do(func() { close(t.stop) })
@@ -526,7 +525,7 @@ func (t *rdpTab) Layout(gtx layout.Context) layout.Dimensions {
 	// fundo do tema: preto fixo no tema claro parecia bug, não vídeo.
 	fundo := color.NRGBA{A: 255}
 	if tela == nil {
-		fundo = tema.Fundo
+		fundo = tema.Pagina
 	}
 	paint.ColorOp{Color: fundo}.Add(gtx.Ops)
 	paint.PaintOp{}.Add(gtx.Ops)

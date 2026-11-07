@@ -4,6 +4,7 @@ import (
 	"image"
 	"time"
 
+	"gioui.org/font"
 	"gioui.org/io/event"
 	"gioui.org/io/pointer"
 
@@ -16,15 +17,15 @@ import (
 	"gioui.org/widget/material"
 )
 
+// As medidas da aba (altura, raio, curvas) estão em moldura.go: desde a
+// 2.9 a tira de abas mora dentro do topo, e a aba ativa se funde à folha.
 const (
-	tabStripHeight = unit.Dp(28)
-	tabRaio        = unit.Dp(7) // notebook tab border-radius
-	tabTipoLado    = unit.Dp(18)
+	abaEspaco = unit.Dp(4) // entre uma aba e a seguinte
 )
 
-// tabBar é a tira de abas-documento (padrão B): barra com o gradiente do
-// cromo, aba em repouso `vidro`, hover `vidro_h`, ativa `vidro_h` + trilho
-// de acento por dentro.
+// tabBar é a tira de abas-documento (padrão B). Desde a 2.9 mora dentro do
+// topo: aba em repouso sem fundo, sob o mouse um véu com os cantos de cima
+// redondos, e a ativa pintada com a folha e contornada (ver layoutAba).
 type tabBar struct {
 	// tagRolagem/acumulado: trocar de aba com a rodinha. Mouse de alta
 	// resolução manda dezenas de eventos fracionários por volta do
@@ -188,45 +189,48 @@ func (b *tabBar) update(gtx layout.Context) {
 	}
 }
 
-func (b *tabBar) layout(gtx layout.Context, th *material.Theme) layout.Dimensions {
+// layout desenha a tira de abas na altura toda do topo, com as abas
+// encostadas embaixo: a ativa, pintada com a folha, cobre o fio da base do
+// topo e desce até a folha (formaAbaAtiva). largurasAba guarda a largura
+// de cada uma, com o espaço depois dela, para o clique do meio achar a aba.
+// colada: a lateral está aberta e a primeira aba é a ativa — ela começa
+// exatamente na borda da folha e desce reta (ver formaAbaAtiva).
+func (b *tabBar) layout(gtx layout.Context, th *material.Theme, colada bool) layout.Dimensions {
 	b.update(gtx)
 	b.rolagem(gtx)
 
-	h := gtx.Dp(tabStripHeight)
+	h := gtx.Constraints.Max.Y
 	gtx.Constraints.Min.Y = h
-	gtx.Constraints.Max.Y = h
-
-	// faixa com cor própria (ver fundoAbas) e fio de borda embaixo, pra
-	// destacar da faixa da janela em cima e do conteúdo embaixo.
-	fundoAbas(gtx, image.Pt(gtx.Constraints.Max.X, h))
-	paint.FillShape(gtx.Ops, tema.Borda2,
-		clip.Rect{Min: image.Pt(0, h-1), Max: image.Pt(gtx.Constraints.Max.X, h)}.Op())
 
 	if len(b.largurasAba) != len(b.tabs) {
 		b.largurasAba = make([]int, len(b.tabs))
 	}
-	children := make([]layout.FlexChild, len(b.tabs))
+	// Largura máxima por aba: até 220dp, e menos quando não cabem todas
+	// (mínimo 110dp) — o título encolhe com reticências em vez de as
+	// últimas abas sumirem cortadas, inalcançáveis.
+	maxAba := gtx.Dp(220)
+	if n := len(b.tabs); n > 0 {
+		cabe := (gtx.Constraints.Max.X - n*gtx.Dp(abaEspaco)) / n
+		maxAba = min(maxAba, max(cabe, gtx.Dp(110)))
+	}
+	children := make([]layout.FlexChild, 0, len(b.tabs)+1)
 	for i := range b.tabs {
 		i := i
-		children[i] = layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			d := b.selectBtn[i].Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				var fechar *widget.Clickable
-				if !b.tabs[i].Pinned() {
-					fechar = &b.closeBtn[i]
-				}
-				return layoutAba(gtx, th, b.tabs[i], i == b.idx, b.selectBtn[i].Hovered(), fechar)
-			})
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			var fechar *widget.Clickable
+			if !b.tabs[i].Pinned() {
+				fechar = &b.closeBtn[i]
+			}
+			d := layoutAba(gtx, th, b.tabs[i], i == b.idx, colada && i == 0, &b.selectBtn[i], fechar, maxAba)
+			d.Size.X += gtx.Dp(abaEspaco)
 			b.largurasAba[i] = d.Size.X
 			return d
-		})
+		}))
 	}
-	dims := layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx, children...)
+	dims := layout.Flex{Axis: layout.Horizontal, Alignment: layout.End}.Layout(gtx, children...)
 
-	// Área de rolagem e de clique do meio sobre a tira INTEIRA, registrada
-	// DEPOIS das abas (portanto por cima) e com PassOp para não tirar o
-	// clique normal delas. Por baixo não funcionaria: no hit-test do Gio,
-	// ao encontrar uma área sem PassOp o percurso salta para o nó pai e
-	// ignora as irmãs registradas antes.
+	// Rolagem do mouse e clique do meio: o alvo cobre a tira toda, mas
+	// deixa o evento passar (PassOp) para o arrastar da janela por baixo.
 	pass := pointer.PassOp{}.Push(gtx.Ops)
 	area := clip.Rect{Max: image.Pt(gtx.Constraints.Max.X, h)}.Push(gtx.Ops)
 	event.Op(gtx.Ops, b.tagRolagem)
@@ -235,142 +239,104 @@ func (b *tabBar) layout(gtx layout.Context, th *material.Theme) layout.Dimension
 	return dims
 }
 
-// layoutAba: ícone do protocolo (mesma cor do card), nome em mono, e "×"
-// só nas abas fecháveis. Estado muda só COR — a altura é a mesma em
-// repouso, hover e ativa, por isso o trilho é desenhado POR DENTRO.
-func layoutAba(gtx layout.Context, th *material.Theme, t Tab, ativa, hover bool, fechar *widget.Clickable) layout.Dimensions {
-	fundo, cor := tema.Vidro, tema.TopoSec
-	switch {
-	case ativa:
-		fundo, cor = tema.VidroH, tema.TopoTxt
-	case hover:
-		fundo, cor = tema.VidroH, tema.TopoTxt
-	}
+// layoutAba desenha uma aba: o selo do tipo (ícone na cor do protocolo),
+// o título e o X. A ativa é pintada com a folha e ganha as curvas da base;
+// a que está sob o mouse, um véu discreto com os cantos de cima redondos.
+// O fundo fica FORA do Clickable: ele recorta a pintura no tamanho da aba,
+// e as curvas moram justamente fora dela.
+func layoutAba(gtx layout.Context, th *material.Theme, t Tab, ativa, colada bool,
+	sel *widget.Clickable, fechar *widget.Clickable, maxAba int) layout.Dimensions {
 
-	// TODAS as abas têm a altura da aba da casinha: o miolo é medido a
-	// partir dela, não do texto de cada uma, senão a aba de conexão fica
-	// mais alta que a fixa e a tira ganha dois degraus.
-	return layout.Inset{Top: 2, Bottom: 2, Left: 1, Right: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		alt := gtx.Dp(tabStripHeight) - gtx.Dp(4)
-		gtx.Constraints.Min.Y = alt
-		gtx.Constraints.Max.Y = alt
-		return layout.Stack{Alignment: layout.Center}.Layout(gtx,
-			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				size := gtx.Constraints.Min
-				borda := transparente
-				if ativa {
-					borda = tema.VidroB
-				}
-				superficie(gtx, size, fundo, borda, tabRaio)
-				return layout.Dimensions{Size: size}
-			}),
-			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				if t.SoIcone() {
-					// aba da casinha: quadrada, glifo no centro dos dois
-					// eixos. O trilho de 2px do estado ativo é desenhado
-					// por dentro, então não desloca o ícone.
-					lado := gtx.Dp(tabStripHeight) - gtx.Dp(4)
-					gtx.Constraints.Min = image.Pt(lado, lado)
-					gtx.Constraints.Max.X = lado
-					return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						ic, cor, _ := t.Selo()
-						return icone(gtx, ic, cor, 15)
-					})
-				}
-				return layout.Inset{Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return selo(gtx, t)
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							if t.SoIcone() {
-								return layout.Dimensions{}
-							}
-							return layout.Inset{Left: 5}.Layout(gtx,
-								txt(th, fonteMono, spAbaNome, t.Title(), cor).Layout)
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							if fechar == nil {
-								return layout.Dimensions{}
-							}
-							return layout.Inset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return fechar.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									c := cor
-									if fechar.Hovered() {
-										c = tema.ErroFg // erro SÓ em ação destrutiva
-									}
-									return layout.UniformInset(1).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										d := icone(gtx, iconeFechar, c, 14)
-										area := clip.Rect{Max: d.Size}.Push(gtx.Ops)
-										pointer.CursorPointer.Add(gtx.Ops)
-										area.Pop()
-										return d
-									})
+	alt := gtx.Dp(abaAltura) + 1 // +1: cobre o fio da base do topo
+	gtx.Constraints.Min.Y, gtx.Constraints.Max.Y = alt, alt
+	gtx.Constraints.Min.X = 0
+
+	conteudo := op.Record(gtx.Ops)
+	d := sel.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		pointer.CursorPointer.Add(gtx.Ops)
+		cor := tema.TopoSec
+		f := fonteSansMedia
+		if ativa {
+			cor = tema.Texto
+			f = fonteSans
+			f.Weight = font.SemiBold
+		} else if sel.Hovered() {
+			cor = tema.TopoTxt
+		}
+		dir := unit.Dp(12)
+		if fechar != nil {
+			dir = 5
+		}
+		// o que sobra para o título depois do ícone, dos respiros e do X
+		resto := gtx.Dp(11) + gtx.Dp(16) + gtx.Dp(8) + gtx.Dp(dir)
+		if fechar != nil {
+			resto += gtx.Dp(6) + gtx.Dp(20)
+		}
+		maxTitulo := max(maxAba-resto, gtx.Dp(24))
+		// W: alinha à esquerda e CENTRALIZA na altura da aba. O Flex passa
+		// o mínimo de altura adiante, e o rótulo, recebendo a altura toda,
+		// desenhava o texto colado no alto.
+		return centroV(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Left: 11, Right: dir}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						ic, corIc, _ := t.Selo()
+						if ic == nil {
+							return layout.Dimensions{}
+						}
+						return icone(gtx, ic, corIc, 16)
+					}),
+					layout.Rigid(layout.Spacer{Width: 8}.Layout),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, maxTitulo)
+						return txt(th, f, unit.Sp(12), t.Title(), cor).Layout(gtx)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						if fechar == nil {
+							return layout.Dimensions{}
+						}
+						return layout.Inset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return fechar.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								lado := gtx.Dp(20)
+								gtx.Constraints.Min = image.Pt(lado, lado)
+								gtx.Constraints.Max = gtx.Constraints.Min
+								pointer.CursorPointer.Add(gtx.Ops)
+								c := tema.TopoSec // na moldura; o Fraco ali fica abaixo de 3:1
+								if ativa {
+									c = tema.Fraco // na folha
+								}
+								if fechar.Hovered() {
+									// fechar ganha vermelho SÓ no hover (ver
+									// ui-pesos-botoes): aviso leve de "isto vai sumir".
+									c = tema.ErroFg
+									superficie(gtx, gtx.Constraints.Min, comAlfa(tema.ErroFg, 0.12), transparente, 6)
+								}
+								return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return icone(gtx, iconeFechar, c, 14)
 								})
 							})
-						}),
-					)
-				})
-			}),
-			// Trilho do estado ativo POR CIMA de tudo: desenhado antes do
-			// conteúdo, qualquer selo um pouco mais alto passava por cima
-			// dele e a aba parecia sem marcação. Inset de 2px, então não
-			// ocupa espaço de layout e a aba não "desce" ao ser escolhida.
-			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				size := gtx.Constraints.Min
-				if !ativa {
-					return layout.Dimensions{Size: size}
-				}
-				alt := gtx.Dp(2)
-				r := clip.Rect{Min: image.Pt(0, size.Y-alt), Max: size}
-				paint.FillShape(gtx.Ops, tema.Azul, r.Op())
-				return layout.Dimensions{Size: size}
-			}),
-		)
+						})
+					}),
+				)
+			})
+		})
 	})
-}
+	desenho := conteudo.Stop()
 
-// selo é a caixinha colorida do protocolo — caixa FIXA para todos, senão
-// um ícone de proporção diferente desalinha a aba inteira (tema.py). Sem
-// o prefixo "VNC/SSH/RDP" no rótulo, é ESTE glifo que diz pra que serve a
-// aba: ele tem que estar centrado nos dois eixos da caixinha, sempre.
-func selo(gtx layout.Context, t Tab) layout.Dimensions {
-	// A caixa nunca pode passar da altura útil da aba: com a aba em 24dp
-	// e o selo em 20, o ícone encostava na borda e parecia sair dela.
-	lado := gtx.Dp(tabTipoLado)
-	// -10dp: 2 de inset em cima e embaixo da aba, 2 do trilho do estado
-	// ativo e respiro. Sem essa folga o selo cobria o trilho azul, e o
-	// ícone parecia vazar da pílula.
-	if max := gtx.Dp(tabStripHeight) - gtx.Dp(10); lado > max {
-		lado = max
+	switch {
+	case ativa:
+		forma := clip.Outline{Path: formaAbaAtiva(gtx, d.Size, colada)}.Op().Push(gtx.Ops)
+		pintarFolha(gtx)
+		forma.Pop()
+		paint.FillShape(gtx.Ops, tema.Contorno,
+			clip.Stroke{Path: contornoAbaAtiva(gtx, d.Size, colada), Width: 1}.Op())
+	case sel.Hovered():
+		r := gtx.Dp(abaRaio)
+		rr := clip.RRect{Rect: image.Rectangle{Max: image.Pt(d.Size.X, d.Size.Y-1)}, NW: r, NE: r}
+		paint.FillShape(gtx.Ops, tinta(tema.TopoTxt, 0.06), rr.Op(gtx.Ops))
 	}
-	quadrado := image.Pt(lado, lado)
-	gtx.Constraints.Min = quadrado
-	gtx.Constraints.Max = quadrado
-
-	ic, cor, fundo := t.Selo()
-	if ic == nil {
-		return layout.Dimensions{Size: quadrado}
-	}
-	// Pintar a caixinha e centrar o glifo na MÃO, sem Stack: o Stack
-	// dimensiona o filho Expanded pelo filho Stacked, e aí a caixa
-	// encolhia pro tamanho do glifo em vez de ficar no lado fixo.
-	superficie(gtx, quadrado, fundo, transparente, 5)
-	// CLIPA na caixa: alguns glifos do conjunto Material desenham fora do
-	// quadrado nominal (o raio do ImageFlashOn estourava a pílula da aba
-	// de Massa). Com o recorte, nenhum ícone novo vaza.
-	defer clip.Rect{Max: quadrado}.Push(gtx.Ops).Pop()
-	// Respiro generoso: os glifos "cheios" do conjunto Material (a pasta
-	// do SFTP, o raio do massa) pintam o quadrado inteiro, ao contrário
-	// dos de traço, e encostavam na borda da caixinha — parecia que o
-	// ícone estava vazando da pílula.
-	tam := lado - gtx.Dp(8)
-	desloc := image.Pt((lado-tam)/2, (lado-tam)/2)
-	defer op.Offset(desloc).Push(gtx.Ops).Pop()
-	gtx.Constraints.Min = image.Point{}
-	gtx.Constraints.Max = image.Pt(tam, tam)
-	icone(gtx, ic, cor, unit.Dp(float32(tam)/gtx.Metric.PxPerDp))
-	return layout.Dimensions{Size: quadrado}
+	desenho.Add(gtx.Ops)
+	return d
 }
 
 // rolagem troca de aba com a rodinha do mouse sobre a tira.

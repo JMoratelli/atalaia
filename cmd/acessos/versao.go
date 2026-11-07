@@ -30,3 +30,11 @@ func versaoInstalada() string {
 	}
 	return strings.TrimSpace(m[1])
 }
+
+// nomeApp é o nome que o usuário vê (título da janela, topo, Sobre,
+// barra de status). Desde a 2.9 é "Atalaia Acessos": "Acessos" sozinho não
+// se acha numa busca. Os identificadores internos NÃO mudaram — o ID
+// org.jj.Acessos, a pasta ~/.config/acessos, o AppId do instalador e os
+// nomes dos arquivos da release —, senão a atualização e as configurações
+// de quem já usa se perdiam.
+const nomeApp = "Atalaia Acessos"

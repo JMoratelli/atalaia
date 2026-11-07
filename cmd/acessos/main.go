@@ -142,7 +142,7 @@ func main() {
 	// executável mesmo com o app aberto (a mesma armadilha documentada no
 	// app original). Tem que ser igual ao StartupWMClass do .desktop.
 	app.ID = "org.jj.Acessos"
-	w.Option(app.Title("Acessos"), app.Decorated(false), app.Maximized.Option())
+	w.Option(app.Title(nomeApp), app.Decorated(false), app.Maximized.Option())
 
 	th := material.NewTheme()
 	// IBM Plex embutida (ver fontes.go) — e não a Go font nem as do
@@ -291,7 +291,19 @@ func main() {
 				return
 			}
 			t := newMassaTab(w, sel, caminhoSnippets(*ini))
+			t.aoPedirCofre = func(depois func()) {
+				pedirCofre(w, painel.arq, *ini, recarregarIni, depois)
+				w.Invalidate()
+			}
 			bar.appendCom(t, fmt.Sprintf("massa|%d|%s", len(sel), sel[0].Nome))
+			// Senhas no cofre trancado: pede a senha mestra já ao abrir a
+			// aba, e a contagem de credenciais se refaz quando ele abrir.
+			if precisaCofre(sel) {
+				t.aoPedirCofre(func() {
+					t.contarCredenciais()
+					w.Invalidate()
+				})
+			}
 			w.Invalidate()
 		}
 		painel.aoExcluirMassa = func(sel []conexoes.Conexao) {
@@ -445,6 +457,11 @@ func runApp(w *app.Window, th *material.Theme, bar *tabBar, recarregar func(),
 	sb := newSidebar()
 	sb.painel = painel // a lateral mostra a MESMA árvore do painel
 	if painel != nil {
+		painel.recarregar = recarregar
+		carregarPrimeiroNome(w.Invalidate)
+		// Com a lateral aberta o filtro mora nela (CampoBusca), e a barra
+		// do Painel deixa de desenhar o próprio — um campo só à vista.
+		painel.buscaNaLateral = func() bool { return !sb.oculta() && !sb.recolhida() }
 		// Menu da máquina na lateral: as mesmas ações do card, mais abrir
 		// cada protocolo direto (na lateral não há os quatro ícones).
 		sb.aoMenuHost = func(cx conexoes.Conexao, pos image.Point) {
@@ -755,12 +772,6 @@ func runApp(w *app.Window, th *material.Theme, bar *tabBar, recarregar func(),
 			// tamanho escolhido, sem cada widget precisar saber disso.
 			gtx.Metric = escalaFonte(gtx.Metric)
 
-			// UM gradiente só, na janela inteira — lateral, abas e cards
-			// são translúcidos POR CIMA dele. Sem fundo variável não existe
-			// vidro: translucidez sobre cor chapada resolve para outra cor
-			// chapada (tema.py). Por isso o fundo não vive dentro de cada
-			// painel, senão cada um ganharia a própria cópia das camadas e
-			// as emendas apareceriam.
 			// Cantos arredondados: com a decoração do sistema fora (CSD),
 			// a moldura é NOSSA. Recortamos a janela inteira num retângulo
 			// arredondado e não pintamos os cantos — eles saem do surface
@@ -773,16 +784,32 @@ func runApp(w *app.Window, th *material.Theme, bar *tabBar, recarregar func(),
 			}
 			recorte := clip.UniformRRect(image.Rectangle{Max: gtx.Constraints.Max}, raio).Push(gtx.Ops)
 
-			// UM gradiente só, na janela inteira — lateral, abas e cards
-			// são translúcidos POR CIMA dele. Sem fundo variável não existe
-			// vidro: translucidez sobre cor chapada resolve para outra cor
-			// chapada (tema.py). Por isso o fundo não vive dentro de cada
-			// painel, senão cada um ganharia a própria cópia das camadas e
-			// as emendas apareceriam.
+			// A MOLDURA na janela inteira (topo, lateral e barra de status
+			// ficam direto sobre ela); a folha é pintada por cima, só na
+			// área do conteúdo, mais abaixo. Ver moldura.go.
 			fundoJanela(gtx, gtx.Constraints.Max)
 
 			if pendingToggleSidebar.Swap(false) {
 				sb.ciclar()
+			}
+			// Onde a folha começa na janela: os menus de contexto do Painel
+			// e da lateral recebem a posição do ponteiro relativa a elas e
+			// somam isto. Nunca era preenchido (os dois ficavam 0) e o menu
+			// abria deslocado do clique.
+			larguraLateralAtual = sb.largura(gtx)
+			alturaTopoAtual = gtx.Dp(topBarAltura)
+			// Com a lateral ABERTA a primeira aba começa exatamente na borda
+			// da folha; se for a ativa, ela "cola": desce reta e vira a
+			// borda, e a folha perde o canto arredondado dali.
+			lateralAberta := larguraLateralAtual == gtx.Dp(lateralLarga)
+			colada := lateralAberta && bar.idx == 0
+			sb.abaColada = colada
+			inicioLinha := 0
+			if larguraLateralAtual > 0 {
+				inicioLinha = larguraLateralAtual + gtx.Dp(folhaRaio)
+				if colada {
+					inicioLinha = larguraLateralAtual
+				}
 			}
 			if pendingCloseActive.Swap(false) {
 				bar.closeActive()
@@ -793,14 +820,8 @@ func runApp(w *app.Window, th *material.Theme, bar *tabBar, recarregar func(),
 
 			layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return tb.layout(gtx, w, th, sb.largura(gtx), acoesTopo{
-						menu:       sb.ciclar,
-						recarregar: recarregar,
-						nova: func() {
-							if caminhoINI != "" {
-								novaConexao(w, caminhoINI, "", recarregarINI)
-							}
-						},
+					return tb.layout(gtx, w, th, inicioLinha, acoesTopo{
+						menu:     sb.ciclar,
 						chaveiro: func() { abrirChaveiro(w) },
 						snippets: func() {
 							abrirSnippets(w, caminhoSnippets(caminhoINI), nil)
@@ -824,6 +845,8 @@ func runApp(w *app.Window, th *material.Theme, bar *tabBar, recarregar func(),
 							lembrarGeral("fonte", strconv.Itoa(proximoNivelFonte()))
 						},
 						trocarTema: alternarTema,
+					}, func(gtx layout.Context) layout.Dimensions {
+						return bar.layout(gtx, th, colada)
 					})
 				}),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
@@ -833,17 +856,34 @@ func runApp(w *app.Window, th *material.Theme, bar *tabBar, recarregar func(),
 							if painel != nil {
 								busca = painel.CampoBusca
 							}
-							return sb.layout(gtx, th, "painel", func(string) { bar.selectIndex(0) }, busca)
+							// O item "Painel" da lateral só fica ativo (e se
+							// funde à folha) quando é o Painel que está nela.
+							ativo := ""
+							if _, ehPainel := activeTab().(*dashTab); ehPainel {
+								ativo = "painel"
+							}
+							return sb.layout(gtx, th, ativo, func(string) {
+								bar.selectIndex(0)
+								w.Invalidate()
+							}, busca)
 						}),
+						// A FOLHA: tudo o que é conteúdo mora nela. Com a
+						// lateral à vista, o canto de cima junto dela é
+						// arredondado — moldura em volta, folha dentro.
 						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+							size := gtx.Constraints.Max
+							raio := 0
+							if !sb.oculta() && !colada {
+								raio = gtx.Dp(folhaRaio)
+							}
+							molde := clip.RRect{Rect: image.Rectangle{Max: size}, NW: raio}.Push(gtx.Ops)
+							defer molde.Pop()
+							fundoFolha(gtx, size)
 							return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return bar.layout(gtx, th)
-								}),
-								// Barra de sessão: só nas abas de conexão, entre a tira
-								// de abas e o conteúdo. É onde o operador vê, sem abrir
-								// nada, se a sessão está viva, para onde ela aponta e em
-								// que resolução — a mesma barra do app original.
+								// Barra de sessão: só nas abas de conexão, logo
+								// abaixo da aba ativa, na própria folha. É onde o
+								// operador vê, sem abrir nada, se a sessão está
+								// viva, para onde ela aponta e em que resolução.
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									a, ok := activeTab().(abaSessao)
 									if !ok {
@@ -859,22 +899,40 @@ func runApp(w *app.Window, th *material.Theme, bar *tabBar, recarregar func(),
 									}
 									return layoutBarraSessao(gtx, th, a,
 										func(gtx layout.Context) layout.Dimensions {
-											return botaoIcone(gtx, &btnTelaCheia,
-												icons.NavigationFullscreen, tema.Sec, tema.Texto)
+											return ferramenta(gtx, &btnTelaCheia,
+												icons.NavigationFullscreen, tema.TopoSec)
 										})
 								}),
 								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-									size := gtx.Constraints.Max
 									// De onde a área de conteúdo começa na
 									// janela: o menu de contexto recebe do
 									// Painel a posição do ponteiro relativa
 									// a ela, e precisa somar isto.
 									offsetConteudo = image.Pt(larguraLateralAtual, alturaTopoAtual)
-									return rotearPonteiroEDesenhar(gtx, activeTab(), contentTag, size)
+									t := activeTab()
+									if _, terminal := t.(*sshTab); terminal {
+										// O terminal ganha folha própria, com
+										// canto e borda, recuada da do app. O
+										// ponteiro vem relativo ao cartão, então
+										// a sessão não precisa saber do recuo.
+										return cartaoTerminal(gtx, func(gtx layout.Context) layout.Dimensions {
+											return rotearPonteiroEDesenhar(gtx, t, contentTag, gtx.Constraints.Max)
+										})
+									}
+									return rotearPonteiroEDesenhar(gtx, t, contentTag, gtx.Constraints.Max)
 								}),
 							)
 						}),
 					)
+				}),
+				// Barra de status: na moldura, embaixo de tudo, mas SÓ
+				// no Painel — numa sessão ela era uma faixa a mais
+				// roubando altura da tela remota.
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					if _, ehPainel := activeTab().(*dashTab); !ehPainel || painel == nil {
+						return layout.Dimensions{}
+					}
+					return painel.barraStatus(gtx)
 				}),
 			)
 

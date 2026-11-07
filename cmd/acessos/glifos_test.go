@@ -42,6 +42,15 @@ func TestFontesEmbutidasCobremOsGlifosUsados(t *testing.T) {
 			continue
 		}
 		for _, ff := range col {
+			// Só a Plex conta. Sora e Space Grotesk (desde a 2.9) vêm
+			// SEMPRE com a Plex depois delas na lista de famílias (tema.go),
+			// e o shaper resolve a fonte LETRA POR LETRA seguindo essa lista
+			// (fontscan.FontMap.ResolveFace): o que faltar nelas — as setas
+			// na Sora, o "↻" nas duas — sai da Plex, nunca quadradinho. A
+			// Plex continua sendo a reserva que tem de cobrir tudo.
+			if !strings.HasPrefix(string(ff.Font.Typeface), "IBM Plex") {
+				continue
+			}
 			face, ok := ff.Face.(opentype.Face)
 			if !ok {
 				t.Fatalf("face inesperada para %v", ff.Font.Typeface)
@@ -53,7 +62,7 @@ func TestFontesEmbutidasCobremOsGlifosUsados(t *testing.T) {
 		}
 		if _, ruim := faltando[r]; ruim {
 			sort.Strings(ondes)
-			t.Errorf("U+%04X %q não existe em %d das %d fontes embutidas — "+
+			t.Errorf("U+%04X %q não existe em %d das fontes Plex embutidas (de %d no total) — "+
 				"no Windows sai quadradinho vazio. Usado em: %s",
 				r, string(r), len(faltando[r]), len(col), strings.Join(ondes, ", "))
 		}

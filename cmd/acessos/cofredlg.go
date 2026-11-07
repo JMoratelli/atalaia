@@ -105,7 +105,7 @@ func (d *dlgCofre) Corpo(gtx layout.Context, th *material.Theme) layout.Dimensio
 	var filhos []layout.FlexChild
 	if d.criando {
 		filhos = []layout.FlexChild{
-			layout.Rigid(rotulo(th, fonteMono, spSecundario,
+			layout.Rigid(rotulo(th, fonteSans, spRotulo,
 				"Este inventário ainda não tem cofre.", tema.Sec)),
 			espaco(4),
 			layout.Rigid(paragrafo(th, fonteSans, spSecundario,
@@ -121,7 +121,7 @@ func (d *dlgCofre) Corpo(gtx layout.Context, th *material.Theme) layout.Dimensio
 		}
 	} else {
 		filhos = []layout.FlexChild{
-			layout.Rigid(rotulo(th, fonteMono, spSecundario,
+			layout.Rigid(rotulo(th, fonteSans, spRotulo,
 				fmt.Sprintf("%d segredos guardados neste arquivo.", d.cifrados()), tema.Sec)),
 			espaco(8),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -140,18 +140,18 @@ func (d *dlgCofre) Corpo(gtx layout.Context, th *material.Theme) layout.Dimensio
 				return campoSenha(gtx, th, &d.confirma, "repita a senha nova")
 			}),
 			espaco(6),
-			layout.Rigid(rotulo(th, fonteMono, spCardMeta,
+			layout.Rigid(rotulo(th, fonteSans, spNota,
 				"Todos os segredos serão recifrados e o arquivo regravado.", tema.Sec)),
 		)
 	}
 	if d.aviso != "" {
 		filhos = append(filhos, espaco(6),
-			layout.Rigid(rotulo(th, fonteMono, spSecundario, d.aviso, tema.OkFg)))
+			layout.Rigid(rotulo(th, fonteSans, spRotulo, d.aviso, tema.OkFg)))
 	}
 	if d.erro != "" {
 		// validação INLINE, sob o campo — nunca um segundo diálogo.
 		filhos = append(filhos, espaco(6),
-			layout.Rigid(rotulo(th, fonteMono, spSecundario, d.erro, tema.ErroFg)))
+			layout.Rigid(rotulo(th, fonteSans, spRotulo, d.erro, tema.ErroFg)))
 	}
 	filhos = append(filhos, espaco(14), layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,

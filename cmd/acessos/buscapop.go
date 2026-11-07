@@ -412,7 +412,7 @@ func abrirJanelaBusca(th *material.Theme, arq *conexoes.Arquivo, tokenAtivacao s
 
 	w := new(app.Window)
 	w.Option(
-		app.Title("Acessos — busca"),
+		app.Title(nomeApp+" — busca"),
 		app.Decorated(false),
 		app.Size(escalaDp(buscaLarg), escalaDp(buscaAlt)),
 		// Mínimo = tamanho fechado, e nada de máximo: é por app.Size que
@@ -619,7 +619,13 @@ func (j *janelaBusca) quadro(gtx layout.Context, w *app.Window) layout.Dimension
 				if w.DesfocarFundo(cartao, gtx.Dp(buscaRaio)) {
 					tinta = tema.BuscaFosco
 				}
-				vidroSobreDesktop(gtx, size, tinta, buscaRaio)
+				// Contornada como a folha do app (tema.Contorno): no
+				// claro, sobre um desktop claro, a borda é o que separa a
+				// caixa do que está atrás.
+				// O fosco da janela principal (fundo = nil) não entra: é
+				// outra janela, outra goroutine, e o que está atrás é o
+				// desktop; quem o desfoca é o compositor.
+				pintarVidro(gtx, size, tinta, tema.Contorno, buscaRaio, nil)
 				return layout.Dimensions{Size: size}
 			}),
 			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
@@ -637,7 +643,7 @@ func (j *janelaBusca) quadro(gtx layout.Context, w *app.Window) layout.Dimension
 							// Pelo mesmo motivo sobe de 9sp (tamanho de
 							// metadado) para 11sp.
 							layout.Rigid(rotulo(j.th, fonteMono, spSecundario,
-								j.rodape(), tema.Sec)),
+								j.rodape(), tema.TopoSec)),
 						)
 					})
 			}),
@@ -665,7 +671,7 @@ func (j *janelaBusca) caixa(gtx layout.Context) layout.Dimensions {
 	gtx.Constraints.Min.X = gtx.Constraints.Max.X
 	return layout.Stack{}.Layout(gtx,
 		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-			superficie(gtx, gtx.Constraints.Min, tema.Campo, tema.LuzB, 8)
+			fundoCampo(gtx, gtx.Constraints.Min, gtx.Focused(&j.campo))
 			return layout.Dimensions{Size: gtx.Constraints.Min}
 		}),
 		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
@@ -718,6 +724,12 @@ func (j *janelaBusca) lista(gtx layout.Context) layout.Dimensions {
 // MESMA do card do Painel, para o mesmo host não ter duas aparências.
 func (j *janelaBusca) linha(i int, cx conexoes.Conexao, avulso bool) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
+		// Fora da linha escolhida o texto está sobre a moldura, e lá o
+		// apagado é TopoSec (Sec/Fraco ficam abaixo de 3:1 no claro).
+		corNome, corMeta := tema.TopoTxt, tema.TopoSec
+		if i == j.sel {
+			corNome, corMeta = tema.Texto, tema.Sec
+		}
 		gtx.Constraints.Min.X = gtx.Constraints.Max.X
 		gtx.Constraints.Min.Y = gtx.Dp(j.alturaDaLinha(i))
 		return j.cliques[i].Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -725,10 +737,10 @@ func (j *janelaBusca) linha(i int, cx conexoes.Conexao, avulso bool) layout.Widg
 				layout.Expanded(func(gtx layout.Context) layout.Dimensions {
 					size := gtx.Constraints.Min
 					if i == j.sel {
-						// A linha escolhida é a que o Enter abre: ela
-						// precisa de um realce que sobreviva ao vidro,
-						// por isso o token de seleção e não o de hover.
-						superficie(gtx, size, tema.TermSel, tema.Borda2, 7)
+						// A linha escolhida é a que o Enter abre: pintada
+						// com a folha e contornada, como a aba ativa e o
+						// item ativo da lateral — o mesmo "é este" do app.
+						superficie(gtx, size, tema.Pagina, tema.Contorno, 8)
 					}
 					return layout.Dimensions{Size: size}
 				}),
@@ -739,14 +751,14 @@ func (j *janelaBusca) linha(i int, cx conexoes.Conexao, avulso bool) layout.Widg
 							return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-										layout.Rigid(negrito(txt(j.th, fonteCond, spCardHost, cx.Nome, tema.Texto)).Layout),
+										layout.Rigid(negrito(txt(j.th, fonteTitulo, spCardHost, cx.Nome, corNome)).Layout),
 										layout.Rigid(layout.Spacer{Width: 10}.Layout),
 										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 											meta := cx.GrupoStr()
 											if avulso {
 												meta = "não cadastrado · sessão temporária"
 											}
-											return rotulo(j.th, fonteMono, spCardMeta, meta, tema.Sec)(gtx)
+											return rotulo(j.th, fonteMono, spCardMeta, meta, corMeta)(gtx)
 										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 											return j.selos(gtx, i, cx)
@@ -764,7 +776,7 @@ func (j *janelaBusca) linha(i int, cx conexoes.Conexao, avulso bool) layout.Widg
 										return layout.Dimensions{}
 									}
 									return layout.Inset{Top: 2}.Layout(gtx,
-										rotuloLinha(j.th, fonteSans, spCardMeta, cx.Descricao, tema.Sec))
+										rotuloLinha(j.th, fonteSans, spCardMeta, cx.Descricao, corMeta))
 								}),
 							)
 						})

@@ -267,7 +267,6 @@ func (t *sshTab) invalidar() {
 }
 
 func (t *sshTab) Title() string { return t.titulo }
-func (t *sshTab) SoIcone() bool { return false }
 func (t *sshTab) Pinned() bool  { return false }
 func (t *sshTab) Selo() (*widget.Icon, color.NRGBA, color.NRGBA) {
 	return icons.ActionCode, tema.Verde, tema.VerdeFraco
@@ -1404,8 +1403,8 @@ func (t *sshTab) layoutSnips(gtx layout.Context) layout.Dimensions {
 	return layout.Background{}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			size := gtx.Constraints.Min
-			paint.FillShape(gtx.Ops, tema.Abas2, clip.Rect{Max: size}.Op())
-			paint.FillShape(gtx.Ops, tema.Borda2, clip.Rect{Max: image.Pt(1, size.Y)}.Op())
+			paint.FillShape(gtx.Ops, tema.Pagina, clip.Rect{Max: size}.Op())
+			paint.FillShape(gtx.Ops, tema.CardBorda, clip.Rect{Max: image.Pt(1, size.Y)}.Op())
 			return layout.Dimensions{Size: size}
 		},
 		func(gtx layout.Context) layout.Dimensions {

@@ -5,11 +5,11 @@ Desenvolvido com IA, revisado por mim
 AI-Assisted, Human-Crafted
   This repository leverages artificial intelligence during the creative process (vibecoding). However, all code is 100% manually reviewed, tested, and maintained by me, ensuring care and quality as a solo maintainer (for now).
   
-# Acessos
+# Atalaia Acessos
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="icones/banner-escuro.svg">
-  <img src="icones/banner-claro.svg" alt="Acessos — VNC, RDP, SSH e SFTP em abas, numa janela só">
+  <img src="icones/banner-claro.svg" alt="Atalaia Acessos — VNC, RDP, SSH e SFTP em abas, numa janela só">
 </picture>
 
 Gerenciador de acesso remoto às máquinas — VNC, RDP, SSH e transferência de
@@ -63,7 +63,7 @@ primeira execução. `-ini` aponta para outro arquivo.
 
 `Ctrl+Shift+F12` abre uma caixa de busca pequena por cima do que estiver na
 tela, sem precisar ir até a janela do programa: digite parte do nome da
-máquina, escolha, e ela abre numa aba nova — com a janela do Acessos vindo
+máquina, escolha, e ela abre numa aba nova — com a janela do Atalaia Acessos vindo
 para a frente junto. Máquina que já está aberta troca para a aba dela.
 
 Cada linha traz a mesma fileira de ícones do Painel: clicar no ícone abre
@@ -75,7 +75,7 @@ sem janela (`acessos -servico`), que sobe junto com o app na primeira vez e
 continua vivo depois que a janela fecha. Com o app aberto, o atalho pipoca a
 caixa nele; com o app fechado, a caixa nasce no serviço e a janela grande só
 sobe quando uma máquina for escolhida. Esse mesmo serviço dá **instância
-única**: abrir o Acessos de novo manda o pedido para a janela que já existe
+única**: abrir o Atalaia Acessos de novo manda o pedido para a janela que já existe
 em vez de abrir uma segunda (e, antes disso, um aperto de tecla chegava a
 abrir duas caixas, uma por instância).
 

@@ -147,7 +147,7 @@ func abrirJanelaSessao(t abaDestacavel, cheia bool,
 
 	j.w = new(app.Window)
 	j.w.Option(
-		app.Title("Acessos — "+t.Title()),
+		app.Title(nomeApp+" — "+t.Title()),
 		// Decoração PRÓPRIA, como a janela principal: a barrinha fina JÁ É
 		// a barra de título desta janela — diz o destino, o estado e a
 		// geometria. Deixar a do compositor por cima gastaria uma segunda
@@ -155,7 +155,8 @@ func abrirJanelaSessao(t abaDestacavel, cheia bool,
 		// evita na janela grande.
 		//
 		// Não é uma segunda cópia do CSD: os botões de janela saem dos
-		// mesmos helpers da barra de topo (botaoIcone/botaoFechar), e o
+		// mesmos helpers da barra de topo (botaoJanela/botaoJanelaFechar,
+		// em moldura.go), e o
 		// arrasto é o mesmo ActionMove.
 		app.Decorated(false),
 		app.Size(unit.Dp(1024), unit.Dp(768)),
@@ -438,15 +439,14 @@ func (j *janelaSessao) desenhar(gtx layout.Context) layout.Dimensions {
 			arrasto.Pop()
 			extras := []layout.Widget{
 				func(gtx layout.Context) layout.Dimensions {
-					return botaoIcone(gtx, &j.btnReatar, icons.ActionExitToApp,
-						tema.Sec, tema.Texto)
+					return ferramenta(gtx, &j.btnReatar, icons.ActionExitToApp, tema.TopoSec)
 				},
 				func(gtx layout.Context) layout.Dimensions {
 					ic := icons.NavigationFullscreen
 					if j.telaCheia {
 						ic = icons.NavigationFullscreenExit
 					}
-					return botaoIcone(gtx, &j.btnTelaCheia, ic, tema.Sec, tema.Texto)
+					return ferramenta(gtx, &j.btnTelaCheia, ic, tema.TopoSec)
 				},
 			}
 			// Botões de JANELA, num grupo só e colados entre si — é o
@@ -474,21 +474,20 @@ func (j *janelaSessao) desenhar(gtx layout.Context) layout.Dimensions {
 				extras = append(extras, func(gtx layout.Context) layout.Dimensions {
 					filhos := []layout.FlexChild{
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return botaoIcone(gtx, &j.btnMin, icons.ContentRemove,
-								tema.Sec, tema.Texto)
+							return botaoJanela(gtx, &j.btnMin, icons.ContentRemove)
 						}),
 					}
 					if !j.telaCheia {
 						filhos = append(filhos, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							ic := icons.ActionOpenInNew
+							ic := icons.ToggleCheckBoxOutlineBlank
 							if j.maximizada {
 								ic = icons.ActionFlipToFront
 							}
-							return botaoIcone(gtx, &j.btnMax, ic, tema.Sec, tema.Texto)
+							return botaoJanela(gtx, &j.btnMax, ic)
 						}))
 					}
 					filhos = append(filhos, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return botaoFechar(gtx, &j.btnFechar)
+						return botaoJanelaFechar(gtx, &j.btnFechar)
 					}))
 					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.
 						Layout(gtx, filhos...)
@@ -514,10 +513,12 @@ func (j *janelaSessao) desenhar(gtx layout.Context) layout.Dimensions {
 	)
 }
 
-// paintFundoJanela pinta o fundo liso da janela de sessão. Liso, e não o
-// gradiente da janela principal, porque aqui ele nunca aparece: a sessão
-// ocupa tudo abaixo da barrinha, e o gradiente só custaria quadro.
+// paintFundoJanela pinta o fundo liso da janela de sessão: a cor da folha,
+// sem a luz do canto da janela principal — aqui ele quase não aparece (a
+// sessão ocupa tudo abaixo da barrinha).
 func paintFundoJanela(gtx layout.Context) {
+	// a folha (sem a luz do canto: esta janela não tem a imagem da folha,
+	// que é da principal), para a barra da sessão ficar no mesmo tom.
 	superficie(gtx, image.Pt(gtx.Constraints.Max.X, gtx.Constraints.Max.Y),
-		tema.Fundo, transparente, 0)
+		tema.Pagina, transparente, 0)
 }

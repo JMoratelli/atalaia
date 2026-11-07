@@ -74,7 +74,7 @@ func (d *dlgConfirmar) Corpo(gtx layout.Context, th *material.Theme) layout.Dime
 	}
 	filhos = append(filhos,
 		espaco(12),
-		layout.Rigid(rotulo(th, fonteMono, spSecundario, "Esta ação não tem desfazer.", tema.Sec)),
+		layout.Rigid(rotulo(th, fonteSans, spRotulo, "Esta ação não tem desfazer.", tema.Sec)),
 		espaco(14),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
@@ -87,7 +87,7 @@ func (d *dlgConfirmar) Corpo(gtx layout.Context, th *material.Theme) layout.Dime
 				layout.Rigid(layout.Spacer{Width: 8}.Layout),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					// largura fixa: o rótulo muda, o botão não pula
-					gtx = botaoLargura(gtx, 220)
+					gtx = botaoLargura(gtx, 270)
 					rot := d.rotulo
 					if !pronto {
 						rot = fmt.Sprintf("%s em %ds", d.rotulo, int(falta.Seconds())+1)

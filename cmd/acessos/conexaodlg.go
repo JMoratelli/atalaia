@@ -203,7 +203,7 @@ func (d *dlgConexao) Corpo(gtx layout.Context, th *material.Theme) layout.Dimens
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						larg := gtx.Dp(96)
 						gtx.Constraints.Min.X, gtx.Constraints.Max.X = larg, larg
-						return rotulo(th, fonteMono, spSecundario, rot, tema.Sec)(gtx)
+						return rotulo(th, fonteSansMedia, spRotulo, rot, tema.Sec)(gtx)
 					}),
 					layout.Flexed(1, w),
 				)
@@ -225,7 +225,7 @@ func (d *dlgConexao) Corpo(gtx layout.Context, th *material.Theme) layout.Dimens
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						larg := gtx.Dp(96)
 						gtx.Constraints.Min.X, gtx.Constraints.Max.X = larg, larg
-						return rotulo(th, fonteMono, spSecundario, rot, tema.Sec)(gtx)
+						return rotulo(th, fonteSansMedia, spRotulo, rot, tema.Sec)(gtx)
 					}),
 					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 						return d.campoSenhaComOlho(gtx, th, i, ed, dica)
@@ -344,7 +344,7 @@ func (d *dlgConexao) Corpo(gtx layout.Context, th *material.Theme) layout.Dimens
 				return layout.Dimensions{}
 			}
 			return layout.Inset{Top: 6}.Layout(gtx,
-				rotulo(th, fonteMono, spSecundario, d.erro, tema.ErroFg))
+				rotulo(th, fonteSans, spRotulo, d.erro, tema.ErroFg))
 		}),
 		espaco(12),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -356,7 +356,7 @@ func (d *dlgConexao) Corpo(gtx layout.Context, th *material.Theme) layout.Dimens
 						// salvar senha), como o aviso igual do Chaveiro.
 						aviso, cor = "cofre trancado: senha nova entraria em claro", tema.AtencaoFg
 					}
-					return rotulo(th, fonteMono, spCardMeta, aviso, cor)(gtx)
+					return rotulo(th, fonteSans, unit.Sp(12), aviso, cor)(gtx)
 				}),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return layout.Dimensions{Size: gtx.Constraints.Min}
@@ -629,7 +629,7 @@ func (d *dlgConexao) bloco(gtx layout.Context, th *material.Theme, i int, titulo
 										return icone(gtx, setaExpansor(d.aberto == i), cor, 16)
 									}),
 									layout.Rigid(layout.Spacer{Width: 6}.Layout),
-									layout.Flexed(1, negrito(txt(th, fonteMono, spSecundario, titulo, cor)).Layout),
+									layout.Flexed(1, negrito(txt(th, fonteSans, spRotulo, titulo, cor)).Layout),
 								)
 							})
 						}),

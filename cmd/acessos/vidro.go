@@ -10,7 +10,6 @@ import (
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/unit"
-	"gioui.org/widget/material"
 )
 
 // VIDRO FOSCO
@@ -20,14 +19,15 @@ import (
 // "REMOTO" do canto aparecendo atrás do nome da máquina —, e por isso o
 // card tinha de ser quase opaco (Vidro2 0,78) para continuar legível.
 //
-// O fundo da janela, porém, não depende do conteúdo: é função só do
-// tamanho, do tema e da escala (gradientes, faixas e os blocos de texto
-// do canto, ver fundoJanela). Então dá para refazê-lo na CPU, uma vez,
-// em baixa resolução, desfocar, e pintar essa imagem atrás de cada
-// cartão. O que o patch do fork (paint.ImageOp.Tela) acrescenta é a
-// âncora: a imagem fica presa à JANELA e não ao cartão, então cada
-// cartão mostra exatamente o pedaço do fundo que está atrás dele — com
-// rolagem, com hover, sem o cartão saber onde está na tela.
+// O fundo da folha, porém, não depende do conteúdo: é função só do
+// tamanho da janela, do tema e da escala (a Pagina com a luz no canto, ver
+// renderFosco). Então dá para refazê-lo na CPU, uma vez, em baixa
+// resolução, desfocar, e pintar essa imagem atrás de cada cartão. O que o
+// patch do fork (paint.ImageOp.Tela) acrescenta é a âncora: a imagem fica
+// presa à JANELA e não ao cartão, então cada cartão mostra exatamente o
+// pedaço do fundo que está atrás dele — com rolagem, com hover, sem o
+// cartão saber onde está na tela. Desde a 2.9 a mesma imagem é o fundo da
+// própria folha (fundoFolha) e da aba ativa, que se funde a ela.
 //
 // Vale só para superfícies que ficam DIRETO sobre o fundo da janela
 // (cards do Painel). Diálogo e menu ficam por cima de outros cartões,
@@ -47,7 +47,8 @@ const (
 var fosco struct {
 	tam    image.Point
 	escuro bool
-	pxSp   float32
+	pxDp   float32
+	topo   int
 	img    paint.ImageOp
 	ok     bool
 }
@@ -59,19 +60,20 @@ func atualizarFosco(gtx layout.Context, size image.Point) {
 	if size.X <= 0 || size.Y <= 0 {
 		return
 	}
-	px := gtx.Metric.PxPerSp
-	if fosco.ok && fosco.tam == size && fosco.escuro == tema.Escuro && fosco.pxSp == px {
+	px := gtx.Metric.PxPerDp
+	topo := gtx.Dp(topBarAltura)
+	if fosco.ok && fosco.tam == size && fosco.escuro == tema.Escuro && fosco.pxDp == px && fosco.topo == topo {
 		return
 	}
-	img := renderFosco(size, px)
+	img := renderFosco(size, px, topo)
 	fosco.img = paint.NewImageOp(img)
 	fosco.img.Filter = paint.FilterLinear
 	fosco.img.Tela = foscoEscala
-	fosco.tam, fosco.escuro, fosco.pxSp, fosco.ok = size, tema.Escuro, px, true
+	fosco.tam, fosco.escuro, fosco.pxDp, fosco.topo, fosco.ok = size, tema.Escuro, px, topo, true
 }
 
 // superficieVidro: vidro fosco. Por baixo, o fundo da janela desfocado;
-// por cima, a tinta (fina — VidroTinta), a mesma luz de superficieRelevo
+// por cima, a tinta (CardTinta nos cards), a mesma luz de superficieRelevo
 // e a borda. Com borda transparente, a borda é de LUZ: clara em cima,
 // apagando para baixo, como a quina de um vidro iluminado de cima — que
 // é de onde a sombra (sombra.go) diz que a luz vem.
@@ -81,15 +83,6 @@ func superficieVidro(gtx layout.Context, size image.Point, tinta, borda color.NR
 		fundo = &fosco.img
 	}
 	pintarVidro(gtx, size, tinta, borda, raioDp, fundo)
-}
-
-// vidroSobreDesktop: o mesmo vidro para uma janela que flutua sobre o
-// DESKTOP (a busca do atalho global). Quem desfoca o que está atrás é o
-// compositor (app.Window.DesfocarFundo); aqui só vão tinta, luz e borda.
-// Não usa o fosco da janela principal — é outra janela, outra goroutine,
-// e o fundo dela é o desktop, não o gradiente do app.
-func vidroSobreDesktop(gtx layout.Context, size image.Point, tinta color.NRGBA, raioDp unit.Dp) {
-	pintarVidro(gtx, size, tinta, transparente, raioDp, nil)
 }
 
 func pintarVidro(gtx layout.Context, size image.Point, tinta, borda color.NRGBA, raioDp unit.Dp, fundo *paint.ImageOp) {
@@ -149,24 +142,6 @@ func superficieCartao(gtx layout.Context, size image.Point, raioDp unit.Dp) {
 		cima, baixo = rgba(0xffffff, 0.14), rgba(0xffffff, 0.05)
 	}
 	bordaDeLuz(gtx, rr, size, cima, baixo, transparente)
-}
-
-// faixaFosca: barra retangular translúcida (lateral, rodapé, barra da
-// sessão) com o fundo desfocado por baixo. Só na janela PRINCIPAL — é a
-// única que tem o fundo fosco, e ela é reconhecida pelo Theme (um por
-// janela; temaApp é o dela). A barra da sessão também é desenhada na
-// janela destacada, sobre a cor sólida dela: lá vai só a tinta de sempre.
-func faixaFosca(gtx layout.Context, th *material.Theme, size image.Point) {
-	r := clip.Rect{Max: size}.Push(gtx.Ops)
-	defer r.Pop()
-	if th == temaApp && fosco.ok {
-		fosco.img.Add(gtx.Ops)
-		paint.PaintOp{}.Add(gtx.Ops)
-		paint.ColorOp{Color: tema.BarraFosca}.Add(gtx.Ops)
-	} else {
-		paint.ColorOp{Color: tema.Barra}.Add(gtx.Ops)
-	}
-	paint.PaintOp{}.Add(gtx.Ops)
 }
 
 // ------------------------------------------------------------ CPU
@@ -234,145 +209,45 @@ func misturar(a, b corLin, t float32) corLin {
 	return corLin{a.r + (b.r-a.r)*t, a.g + (b.g-a.g)*t, a.b + (b.b-a.b)*t, a.a + (b.a-a.a)*t}
 }
 
-// gradLin é gradCSS fora do Gio: mesma convenção de ângulo, mesmas
-// paradas, mesma interpolação (linear, pré-multiplicada, travada nas
-// pontas — é o que o shader de gradiente do Gio faz).
-type gradLin struct {
-	p1x, p1y, dx, dy, inv float32
-	c1, c2                corLin
-}
-
-func novoGradLin(w, h float32, anguloGraus float64, c1 color.NRGBA, pos1 float64, c2 color.NRGBA, pos2 float64) gradLin {
-	rad := anguloGraus * math.Pi / 180
-	sx, sy := math.Sin(rad), -math.Cos(rad)
-	comp := math.Abs(float64(w)*sx) + math.Abs(float64(h)*sy)
-	cx, cy := float64(w)/2, float64(h)/2
-	p1x, p1y := cx+sx*(pos1-0.5)*comp, cy+sy*(pos1-0.5)*comp
-	p2x, p2y := cx+sx*(pos2-0.5)*comp, cy+sy*(pos2-0.5)*comp
-	dx, dy := p2x-p1x, p2y-p1y
-	n := dx*dx + dy*dy
-	if n == 0 {
-		n = 1
-	}
-	return gradLin{float32(p1x), float32(p1y), float32(dx), float32(dy), float32(1 / n), paraLin(c1), paraLin(c2)}
-}
-
-func (g gradLin) em(x, y float32) corLin {
-	t := ((x-g.p1x)*g.dx + (y-g.p1y)*g.dy) * g.inv
-	if t < 0 {
-		t = 0
-	} else if t > 1 {
-		t = 1
-	}
-	return misturar(g.c1, g.c2, t)
-}
-
-// dentroQuad: ponto dentro do quadrilátero convexo (qualquer sentido).
-func dentroQuad(p [4]f32.Point, x, y float32) bool {
-	pos, neg := false, false
-	for i := range 4 {
-		a, b := p[i], p[(i+1)%4]
-		c := (b.X-a.X)*(y-a.Y) - (b.Y-a.Y)*(x-a.X)
-		if c > 0 {
-			pos = true
-		} else if c < 0 {
-			neg = true
-		}
-	}
-	return !(pos && neg)
-}
-
-// renderFosco refaz fundoJanela em baixa resolução e desfoca. Pontos,
-// linha lateral e nós ficam de fora: são finos demais para sobrar
-// qualquer coisa depois do desfoque. O texto do canto entra como uma
-// mancha do tamanho das letras com a tinta média delas — é o que o
-// desfoque deixaria dele.
-func renderFosco(size image.Point, pxPorSp float32) *image.RGBA {
+// renderFosco desenha, em 1/foscoEscala da resolução, a folha como ela
+// fica na janela: a Pagina, a luz no canto superior direito (o
+// .gt-page-glow da central do ChamadoJá: elipse de 900×520 presa ao canto
+// de cima da folha, transparente a 72% do raio) e, no tema claro, o véu
+// claro no meio (700×420, transparente a 75%). Tudo em pixels da janela,
+// com a folha começando abaixo do topo (topo, em px). A luz é suave de
+// propósito, então o desfoque quase não muda nada nela — ele fica porque a
+// mesma imagem é o fundo dos cards de vidro.
+func renderFosco(size image.Point, pxDp float32, topo int) *image.RGBA {
 	const e = foscoEscala
 	w, h := float32(size.X), float32(size.Y)
 	lw, lh := size.X/e+2, size.Y/e+2
 
-	base := novoGradLin(w, h, 170, tema.Fundo1, 0, tema.Fundo3, 1)
-	luz1 := novoGradLin(w, h, 150, tema.Luz1, 0, transparente, 0.55)
-	luz2 := novoGradLin(w, h, 15, tema.Luz2, 0, transparente, 0.45)
-	faixas := faixasCanto(w, h)
-	var corFaixa [4]corLin
-	for i, f := range faixas {
-		corFaixa[i] = paraLin(f.cor)
+	base := paraLin(tema.Pagina)
+	brilho := paraLin(tema.Brilho)
+	veu := paraLin(tema.BrilhoVeu)
+	t0 := float32(topo)
+	type elipse struct {
+		cx, cy, rx, ry, fim float32
+		cor                 corLin
 	}
-
-	// Manchas de texto e barras do canto, em pixels da janela. Métrica da
-	// IBM Plex Mono: avanço 0,6 em, altura de maiúscula 0,7 em, linha de
-	// base em ~1,0 em; letra maiúscula cobre ~22% da própria caixa.
-	type mancha struct {
-		r   image.Rectangle
-		cor corLin
-		g   *gradLin
+	luzes := []elipse{
+		{cx: w, cy: t0, rx: 900 * pxDp, ry: 520 * pxDp, fim: 0.72, cor: brilho},
 	}
-	var manchas []mancha
-	tinta := paraLin(comAlfa(tema.Sec, cantoTxtAlfa*0.22))
-	em := cantoTamFonte * pxPorSp
-	barra := novoGradLin(cantoLargBarra, cantoAltBarra, 90, tema.Roxo, 0, tema.Verde, 1)
-	for _, b := range blocosCanto {
-		x, y := w*cantoX, h*b.y
-		for i, s := range b.linhas {
-			topo := y + float32(i*cantoAltLinha)
-			manchas = append(manchas, mancha{r: image.Rect(
-				int(x), int(topo+0.30*em), int(x+0.6*em*float32(len([]rune(s)))), int(topo+1.0*em)),
-				cor: tinta})
-		}
-		by := y + float32(len(b.linhas))*cantoAltLinha + cantoBarraDy
-		g := barra
-		manchas = append(manchas, mancha{r: image.Rect(int(x), int(by), int(x)+cantoLargBarra, int(by)+cantoAltBarra), g: &g})
-	}
-
-	// Caixa de cada faixa, para descartar rápido o texel que nem chega
-	// perto dela (a maioria).
-	var caixas [4]image.Rectangle
-	for k, f := range faixas {
-		r := image.Rectangle{Min: image.Pt(math.MaxInt32, math.MaxInt32), Max: image.Pt(math.MinInt32, math.MinInt32)}
-		for _, p := range f.pts {
-			r.Min.X, r.Min.Y = min(r.Min.X, int(p.X)-1), min(r.Min.Y, int(p.Y)-1)
-			r.Max.X, r.Max.Y = max(r.Max.X, int(p.X)+1), max(r.Max.Y, int(p.Y)+1)
-		}
-		caixas[k] = r
+	if veu.a > 0 {
+		luzes = append(luzes, elipse{cx: w * 0.45, cy: t0 + (h-t0)*0.45, rx: 700 * pxDp, ry: 420 * pxDp, fim: 0.75, cor: veu})
 	}
 
 	buf := make([]corLin, lw*lh)
-	const area = 1.0 / (e * e)
 	for j := range lh {
 		for i := range lw {
-			// Os gradientes são lisos: o centro do texel basta. Só as
-			// bordas (faixas, manchas) precisam de cobertura.
 			cx, cy := (float32(i)+0.5)*e, (float32(j)+0.5)*e
-			c := base.em(cx, cy)
-			c = sobre(c, luz1.em(cx, cy))
-			c = sobre(c, luz2.em(cx, cy))
-			tex := image.Rect(i*e, j*e, (i+1)*e, (j+1)*e)
-			for k, f := range faixas {
-				if !tex.Overlaps(caixas[k]) {
-					continue
+			c := base
+			for _, l := range luzes {
+				dx, dy := (cx-l.cx)/l.rx, (cy-l.cy)/l.ry
+				d := float32(math.Sqrt(float64(dx*dx+dy*dy))) / l.fim
+				if d < 1 {
+					c = sobre(c, l.cor.mul(1-d))
 				}
-				n := 0
-				for _, d := range [4][2]float32{{0.25, 0.25}, {0.75, 0.25}, {0.25, 0.75}, {0.75, 0.75}} {
-					if dentroQuad(f.pts, (float32(i)+d[0])*e, (float32(j)+d[1])*e) {
-						n++
-					}
-				}
-				if n > 0 {
-					c = sobre(c, corFaixa[k].mul(float32(n)/4))
-				}
-			}
-			for _, m := range manchas {
-				in := tex.Intersect(m.r)
-				if in.Empty() {
-					continue
-				}
-				cor := m.cor
-				if m.g != nil {
-					cor = m.g.em(cx-float32(m.r.Min.X), 0)
-				}
-				c = sobre(c, cor.mul(float32(in.Dx()*in.Dy())*area))
 			}
 			buf[j*lw+i] = c
 		}

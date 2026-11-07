@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"acessos-go/internal/chaveiro"
+	"acessos-go/internal/cofre"
 	"acessos-go/internal/conexoes"
 	"acessos-go/internal/massa/model"
 	"acessos-go/internal/massa/runner"
@@ -66,15 +68,19 @@ type massaTab struct {
 	lista      widget.List
 	listaSnip  widget.List
 
-	comCred   int    // quantas máquinas já têm credencial SSH salva
-	pausa     *pausa // decisão pendente do runner (canário ou erro)
-	mu        sync.Mutex
-	rodando   bool
-	estados   map[string]*estadoMaquina
-	feitos    int
-	ok, ruins int
-	log       []string
-	corrente  *runner.Runner
+	comCred int // quantas máquinas já têm credencial SSH salva
+	// aoPedirCofre pede a senha mestra e chama depois quando o cofre
+	// abrir (quem abre a aba liga isto ao pedirCofre, que precisa do
+	// arquivo carregado).
+	aoPedirCofre func(depois func())
+	pausa        *pausa // decisão pendente do runner (canário ou erro)
+	mu           sync.Mutex
+	rodando      bool
+	estados      map[string]*estadoMaquina
+	feitos       int
+	ok, ruins    int
+	log          []string
+	corrente     *runner.Runner
 }
 
 // itemFila é um comando da fila, com de onde ele veio (para o operador
@@ -117,22 +123,7 @@ func newMassaTab(w *app.Window, cxs []conexoes.Conexao, caminhoSnippets string) 
 	// preenchidos com a primeira credencial encontrada e ficam escondidos
 	// quando todas as máquinas já têm a sua — na prática, o operador só
 	// digita a senha de root.
-	for _, cx := range cxs {
-		if cx.Tem(conexoes.SSH) && cx.SSH.Usuario != "" {
-			if _, err := segredo(cx.SSH.Senha); err == nil {
-				t.comCred++
-			}
-		}
-	}
-	for _, cx := range cxs {
-		if cx.Tem(conexoes.SSH) && cx.SSH.Usuario != "" {
-			t.usuario.SetText(chaveiroAtual.Resolver(cx.SSH.Usuario, "usuario"))
-			if s, err := segredo(cx.SSH.Senha); err == nil {
-				t.senha.SetText(s)
-			}
-			break
-		}
-	}
+	t.contarCredenciais()
 	for _, cx := range cxs {
 		t.estados[cx.Nome] = &estadoMaquina{}
 	}
@@ -147,7 +138,6 @@ func newMassaTab(w *app.Window, cxs []conexoes.Conexao, caminhoSnippets string) 
 }
 
 func (t *massaTab) Title() string { return fmt.Sprintf("Massa (%d)", len(t.cxs)) }
-func (t *massaTab) SoIcone() bool { return false }
 func (t *massaTab) Pinned() bool  { return false }
 func (t *massaTab) Selo() (*widget.Icon, color.NRGBA, color.NRGBA) {
 	return icons.ImageFlashOn, tema.AtencaoFg, tema.AtencaoBg
@@ -192,7 +182,63 @@ func credencialDigitada(usuario, senha string) (model.Credencial, error) {
 	return model.Credencial{Usuario: u, Senha: s}, nil
 }
 
+// contarCredenciais conta quantas máquinas têm credencial SSH salva que
+// dá para usar AGORA (com o cofre trancado, as cifradas não contam) e
+// preenche a credencial padrão com a da primeira. Roda na criação da aba e
+// de novo quando o cofre abre — antes era só na criação, e o aviso "0 de N
+// usam a credencial salva" ficava errado depois de destrancar.
+func (t *massaTab) contarCredenciais() {
+	t.comCred = 0
+	for _, cx := range t.cxs {
+		if cx.Tem(conexoes.SSH) && cx.SSH.Usuario != "" {
+			if _, err := segredo(cx.SSH.Senha); err == nil {
+				t.comCred++
+			}
+		}
+	}
+	for _, cx := range t.cxs {
+		if cx.Tem(conexoes.SSH) && cx.SSH.Usuario != "" {
+			t.usuario.SetText(chaveiroAtual.Resolver(cx.SSH.Usuario, "usuario"))
+			if s, err := segredo(cx.SSH.Senha); err == nil {
+				t.senha.SetText(s)
+			}
+			break
+		}
+	}
+}
+
+// precisaCofre: o cofre está trancado e alguma das máquinas tem a senha
+// SSH guardada nele (direto ou por uma credencial do chaveiro).
+func precisaCofre(cxs []conexoes.Conexao) bool {
+	if cofreAberto != nil {
+		return false
+	}
+	for _, cx := range cxs {
+		if !cx.Tem(conexoes.SSH) || cx.SSH.Usuario == "" {
+			continue
+		}
+		valor := cx.SSH.Senha
+		if chaveiro.EhAlias(valor) {
+			valor = chaveiroAtual.Resolver(valor, "senha")
+		}
+		if cofre.Cifrado(valor) {
+			return true
+		}
+	}
+	return false
+}
+
 func (t *massaTab) executar() {
+	// Senha guardada no cofre e cofre trancado: pede a senha mestra e
+	// repete a execução quando ele abrir — o mesmo que abrir uma sessão
+	// faz. Antes seguia em silêncio com a credencial digitada na tela.
+	if precisaCofre(t.cxs) && t.aoPedirCofre != nil {
+		t.aoPedirCofre(func() {
+			t.contarCredenciais()
+			t.executar()
+		})
+		return
+	}
 	// O que está digitado e ainda não foi somado à fila conta como o
 	// último comando: esquecer de clicar em "+" não pode significar
 	// executar coisa diferente do que está na tela.
@@ -272,7 +318,10 @@ func (t *massaTab) executar() {
 		UsarRoot:   t.usarRoot || filaPedeRoot(fila),
 		RootCred:   credRoot,
 		Plataforma: model.Linux,
-		Workers:    8,
+		// "1 por vez" é UM worker: a fila anda máquina a máquina, e
+		// "parar no erro" para de fato antes da próxima. Era sempre 8 —
+		// a escolha da tela nunca chegava aqui.
+		Workers: seSim(t.paralelo, 8, 1),
 		// TRÊS canários, sempre: um só não distingue "o comando está
 		// errado" de "esta máquina está ruim". Rodam em sequência, e a
 		// fase 2 só começa depois que alguém olhar o resultado.
@@ -374,17 +423,21 @@ func (t *massaTab) Layout(gtx layout.Context) layout.Dimensions {
 		}
 	}
 
-	return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-		// esquerda: o que rodar
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			larg := gtx.Dp(unit.Dp(330))
-			gtx.Constraints.Min.X = larg
-			gtx.Constraints.Max.X = larg
-			return t.painelComando(gtx)
-		}),
-		// direita: máquinas e resultado
-		layout.Flexed(1, t.painelMaquinas),
-	)
+	// Margem da folha (2.9): a aba mora na folha, como o Painel, e não
+	// encosta mais nas bordas da janela.
+	return layout.Inset{Top: 12, Bottom: 12, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
+			// esquerda: o que rodar
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				larg := gtx.Dp(unit.Dp(330))
+				gtx.Constraints.Min.X = larg
+				gtx.Constraints.Max.X = larg
+				return t.painelComando(gtx)
+			}),
+			// direita: máquinas e resultado
+			layout.Flexed(1, t.painelMaquinas),
+		)
+	})
 }
 
 // painelComando: biblioteca de snippets em cima, comando embaixo,
@@ -397,7 +450,7 @@ func (t *massaTab) painelComando(gtx layout.Context) layout.Dimensions {
 
 	return layout.Inset{Top: 10, Bottom: 10, Left: 12, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(negrito(txt(t.th, fonteCond, spSubgrupo, "Snippets", tema.Texto)).Layout),
+			layout.Rigid(negrito(txt(t.th, fonteTitulo, spSubgrupo, "Snippets", tema.Texto)).Layout),
 			layout.Rigid(layout.Spacer{Height: 6}.Layout),
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 				return material.List(t.th, &t.listaSnip).Layout(gtx, len(t.snips), func(gtx layout.Context, i int) layout.Dimensions {
@@ -407,12 +460,12 @@ func (t *massaTab) painelComando(gtx layout.Context) layout.Dimensions {
 			layout.Rigid(layout.Spacer{Height: 8}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					layout.Rigid(negrito(txt(t.th, fonteCond, spSubgrupo,
+					layout.Rigid(negrito(txt(t.th, fonteTitulo, spSubgrupo,
 						fmt.Sprintf("Fila (%d)", len(t.fila)), tema.Texto)).Layout),
 					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 						return layout.Dimensions{Size: gtx.Constraints.Min}
 					}),
-					layout.Rigid(rotulo(t.th, fonteMono, spCardMeta, "clique num snippet para somar", tema.Fraco)),
+					layout.Rigid(rotulo(t.th, fonteSans, spNota, "clique num snippet para somar", tema.Fraco)),
 				)
 			}),
 			layout.Rigid(layout.Spacer{Height: 4}.Layout),
@@ -442,7 +495,7 @@ func (t *massaTab) painelComando(gtx layout.Context) layout.Dimensions {
 				if t.comCred < len(t.cxs) {
 					cor = tema.AtencaoFg
 				}
-				return rotulo(t.th, fonteMono, spCardMeta, aviso, cor)(gtx)
+				return rotulo(t.th, fonteSans, spNota, aviso, cor)(gtx)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				// Campos de SSH só aparecem se ALGUMA máquina não tiver
@@ -516,9 +569,9 @@ func (t *massaTab) linhaSnippet(gtx layout.Context, i int) layout.Dimensions {
 				case escolhido:
 					fundo, borda = tema.AzulFraco, tema.Azul
 				case t.btnSnip[i].Hovered():
-					fundo = tema.Vidro2
+					fundo = tinta(tema.Texto, 0.06)
 				}
-				superficie(gtx, gtx.Constraints.Min, fundo, borda, 7)
+				superficie(gtx, gtx.Constraints.Min, fundo, borda, 8)
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			},
 			func(gtx layout.Context) layout.Dimensions {
@@ -573,7 +626,7 @@ func (t *massaTab) listaMaquinas(gtx layout.Context) layout.Dimensions {
 			return t.btnLinha[i].Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Background{}.Layout(gtx,
 					func(gtx layout.Context) layout.Dimensions {
-						superficie(gtx, gtx.Constraints.Min, tema.Vidro2, tema.LuzB, 8)
+						superficie(gtx, gtx.Constraints.Min, tema.CardTinta, tema.CardBorda, 12)
 						return layout.Dimensions{Size: gtx.Constraints.Min}
 					},
 					func(gtx layout.Context) layout.Dimensions {
@@ -586,7 +639,7 @@ func (t *massaTab) listaMaquinas(gtx layout.Context) layout.Dimensions {
 											return chipEstado(gtx, t.th, chip, tipo)
 										}),
 										layout.Rigid(layout.Spacer{Width: 8}.Layout),
-										layout.Rigid(negrito(txt(t.th, fonteCond, spCardHost, cx.Nome, tema.Texto)).Layout),
+										layout.Rigid(negrito(txt(t.th, fonteTitulo, spCardHost, cx.Nome, tema.Texto)).Layout),
 										layout.Rigid(layout.Spacer{Width: 8}.Layout),
 										layout.Flexed(1, rotulo(t.th, fonteMono, spCardMeta, cx.Host, tema.Fraco)),
 										layout.Rigid(rotulo(t.th, fonteMono, spCardMeta, duracao(e.dur), tema.Fraco)),
@@ -702,9 +755,10 @@ func caixaEditor(gtx layout.Context, th *material.Theme, ed *widget.Editor, dica
 	if ed.SingleLine {
 		ed.Submit = true
 	}
+	focado := gtx.Focused(ed)
 	return layout.Background{}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
-			superficie(gtx, gtx.Constraints.Min, tema.Campo, tema.Borda2, 7)
+			fundoCampo(gtx, gtx.Constraints.Min, focado)
 			return layout.Dimensions{Size: gtx.Constraints.Min}
 		},
 		func(gtx layout.Context) layout.Dimensions {
@@ -714,7 +768,7 @@ func caixaEditor(gtx layout.Context, th *material.Theme, ed *widget.Editor, dica
 				gtx.Constraints.Min.Y = h
 				gtx.Constraints.Max.Y = h
 			}
-			return layout.Inset{Top: 6, Bottom: 6, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Top: 9, Bottom: 9, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				e := material.Editor(th, ed, dica)
 				e.Font = fonteMono
 				e.TextSize = spCorpo
@@ -731,13 +785,16 @@ func caixaMarcar(gtx layout.Context, th *material.Theme, btn *widget.Clickable, 
 	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				lado := gtx.Dp(15)
+				lado := gtx.Dp(16)
 				gtx.Constraints.Min = image.Pt(lado, lado)
-				fundo, borda := transparente, tema.LuzB
+				fundo, borda := tema.Elevado, tema.Borda2
+				if btn.Hovered() {
+					borda = comAlfa(tema.AzulCheio, 0.6)
+				}
 				if marcado {
 					fundo, borda = tema.AzulCheio, tema.AzulCheio
 				}
-				superficie(gtx, image.Pt(lado, lado), fundo, borda, 4)
+				superficie(gtx, image.Pt(lado, lado), fundo, borda, 5)
 				if marcado {
 					layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 						return icone(gtx, icons.NavigationCheck, hex(0xffffff), 11)
@@ -745,8 +802,8 @@ func caixaMarcar(gtx layout.Context, th *material.Theme, btn *widget.Clickable, 
 				}
 				return layout.Dimensions{Size: image.Pt(lado, lado)}
 			}),
-			layout.Rigid(layout.Spacer{Width: 6}.Layout),
-			layout.Rigid(txt(th, fonteMono, spSecundario, rot, tema.Sec).Layout),
+			layout.Rigid(layout.Spacer{Width: 8}.Layout),
+			layout.Rigid(txt(th, fonteSansMedia, unit.Sp(13), rot, tema.Sec).Layout),
 		)
 	})
 }
@@ -791,7 +848,7 @@ func (t *massaTab) painelFila(gtx layout.Context) layout.Dimensions {
 		return layout.Inset{Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Background{}.Layout(gtx,
 				func(gtx layout.Context) layout.Dimensions {
-					superficie(gtx, gtx.Constraints.Min, tema.Vidro2, tema.LuzB, 6)
+					superficie(gtx, gtx.Constraints.Min, tema.CardTinta, tema.CardBorda, 8)
 					return layout.Dimensions{Size: gtx.Constraints.Min}
 				},
 				func(gtx layout.Context) layout.Dimensions {

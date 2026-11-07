@@ -44,15 +44,11 @@ func TestContrasteDosTokens(t *testing.T) {
 		if nome == "escuro" {
 			tema = temaEscuro
 		}
-		// Pior card: o vidro sobre a parte mais escura do fundo (claro)
-		// ou sobre uma faixa diagonal (escuro, onde a faixa clareia).
-		faixa := faixasCanto(1000, 1000)[0].cor
-		cardPior := composta(tema.Fundo3, tema.VidroTinta)
-		barraPior := composta(tema.Fundo3, tema.BarraFosca)
-		if tema.Escuro {
-			cardPior = composta(tema.Fundo1, faixa, tema.VidroTinta)
-			barraPior = composta(tema.Fundo1, faixa, tema.BarraFosca)
-		}
+		// Pior card: o vidro do card no ponto mais forte da luz do canto
+		// da folha (é ali que o fundo mais se afasta da Pagina). Desde a
+		// 2.9 não há mais faixas diagonais nem gradiente na janela.
+		cardPior := composta(tema.Pagina, tema.Brilho, tema.CardTinta)
+		folhaPior := composta(tema.Pagina, tema.Brilho)
 
 		casos := []struct {
 			oque       string
@@ -78,10 +74,14 @@ func TestContrasteDosTokens(t *testing.T) {
 			// (#748ffc) dava 2,97:1 com o rótulo branco.
 			{"rótulo do botão primário", hex(0xffffff), tema.AzulCheio, 4.3},
 			{"rótulo do primário no hover", hex(0xffffff), tema.AzulCheioH, 4.3},
-			// Barras foscas (lateral, rodapé, barra da sessão) no pior
-			// ponto do fundo.
-			{"Sec na barra fosca", tema.Sec, barraPior, 4.5},
-			{"TopoSec na barra fosca", tema.TopoSec, barraPior, 4.5},
+			// Moldura (topo, lateral, barra de status) é opaca; a barra da
+			// sessão fica sobre a folha, no pior ponto da luz do canto.
+			{"Sec na moldura", tema.Sec, tema.Moldura, 4.5},
+			{"TopoSec na moldura", tema.TopoSec, tema.Moldura, 4.5},
+			{"Sec na folha", tema.Sec, folhaPior, 4.5},
+			{"Fraco na folha (dica)", tema.Fraco, folhaPior, 3},
+			// Rótulo da aba ativa e de item escolhido num trilho.
+			{"Texto no elevado", tema.Texto, tema.Elevado, 7},
 			// Hover tem de se ver contra a superfície em que acontece.
 			{"hover contra o diálogo", tema.Hover, tema.Cartao, 1.15},
 		}
@@ -119,7 +119,7 @@ func TestRenderFoscoCobreAJanela(t *testing.T) {
 	defer func() { tema = salvo }()
 	for _, tm := range []Tema{temaClaro, temaEscuro} {
 		tema = tm
-		img := renderFosco(image.Pt(1366, 700), 1)
+		img := renderFosco(image.Pt(1366, 700), 1, 48)
 		// cada texel cobre foscoEscala px: a imagem tem de passar da borda
 		if b := img.Bounds().Size(); b.X*foscoEscala < 1366 || b.Y*foscoEscala < 700 {
 			t.Fatalf("fosco %v não cobre 1366x700", b)

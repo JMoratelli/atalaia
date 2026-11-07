@@ -4,15 +4,18 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"os"
+	"os/user"
 	"strings"
-
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"acessos-go/internal/conexoes"
 	"acessos-go/internal/vida"
 
 	"gio.tools/icons"
+	"gioui.org/font"
 	"gioui.org/io/event"
 	"gioui.org/io/pointer"
 	"gioui.org/layout"
@@ -25,10 +28,13 @@ import (
 )
 
 const (
-	cardLargura = unit.Dp(172)
-	cardRaio    = unit.Dp(9)  // .card
-	icoRaio     = unit.Dp(7)  // .card-ico
-	icoAltura   = unit.Dp(36) // .card-ico (26px no CSS; aqui o card é quadrado e sobra altura)
+	// O card deixou de ser quadrado na 2.9: mais baixo, sem o vão no
+	// meio, e esticado para a grade fechar a linha (ver grade).
+	cardLargura = unit.Dp(178) // largura MÍNIMA
+	cardAltura  = unit.Dp(144)
+	cardRaio    = unit.Dp(14)
+	icoRaio     = unit.Dp(8)  // segmento do trilho de protocolos
+	icoAltura   = unit.Dp(30) // idem
 )
 
 // acaoAbrir é o que o painel pede quando alguém clica num ícone de
@@ -92,6 +98,7 @@ type dashTab struct {
 	btnLimparSel  widget.Clickable
 	btnExcluirSel widget.Clickable
 	btnSobre      widget.Clickable
+	btnRecarregar widget.Clickable
 
 	// seleção para execução em massa. A chave é grupo|nome, a mesma dos
 	// Clickables — o card é identificado pelo par, porque nome se repete
@@ -122,7 +129,10 @@ type dashTab struct {
 	travaAbrir  int // quadros em que clique não abre (gesto do botão direito)
 	aoMenuCard  func(cx conexoes.Conexao, pos image.Point)
 	aoNova      func(grupo string)
-	aoEfemera   func(destino string)
+	// buscaNaLateral diz se o filtro está sendo desenhado na lateral
+	// (aberta): aí a barra do Painel não desenha o dela.
+	buscaNaLateral func() bool
+	aoEfemera      func(destino string)
 	// aoRascunho abre um destino NÃO cadastrado (o card temporário da
 	// busca): quem trata pergunta as credenciais antes de conectar.
 	aoRascunho func(cx conexoes.Conexao, p conexoes.Protocolo)
@@ -191,6 +201,19 @@ func (d *dashTab) sondador() {
 
 // estadoVida devolve o que se sabe do host e enfileira a checagem quando
 // ainda não se sabe nada.
+// vidaConhecida devolve o estado de vida que já se sabe, SEM pôr a máquina
+// na fila de verificação — é o que a lateral usa: quem pergunta é o
+// Painel, e a lateral desenhando a árvore não pode disparar checagem de
+// rede em cada máquina que aparece nela.
+func (d *dashTab) vidaConhecida(cx conexoes.Conexao) vida.Estado {
+	d.vidaMu.Lock()
+	defer d.vidaMu.Unlock()
+	if e, sabido := d.vida[cx.Host]; sabido {
+		return e
+	}
+	return vida.Desconhecido
+}
+
 func (d *dashTab) estadoVida(cx conexoes.Conexao) vida.Estado {
 	d.vidaMu.Lock()
 	e, sabido := d.vida[cx.Host]
@@ -223,9 +246,9 @@ func (d *dashTab) recarregarCom(arq *conexoes.Arquivo) {
 }
 
 func (d *dashTab) Title() string { return "Painel" }
-func (d *dashTab) SoIcone() bool { return true }
+
 func (d *dashTab) Selo() (*widget.Icon, color.NRGBA, color.NRGBA) {
-	return icons.ActionHome, tema.TopoTxt, tema.Vidro
+	return icons.ActionDashboard, tema.Azul, transparente
 }
 func (d *dashTab) Pinned() bool                  { return true }
 func (d *dashTab) Close()                        {}
@@ -332,8 +355,12 @@ func (d *dashTab) Layout(gtx layout.Context) layout.Dimensions {
 	}
 	defer d.rastrearPonteiro(gtx)
 
+	// O trecho solto da malha de hexágonos fica ATRÁS de tudo, preso ao
+	// canto inferior esquerdo da folha (não rola com a lista). O de cima
+	// mora no cartão de boas-vindas (cabecalho).
+	malhaHex(gtx)
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(d.hero),
+		layout.Rigid(d.cabecalho),
 		layout.Rigid(d.barraFiltro),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return d.cardRascunho(gtx, termo)
@@ -341,44 +368,185 @@ func (d *dashTab) Layout(gtx layout.Context) layout.Dimensions {
 		layout.Rigid(d.barraSelecao),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			return d.lista.Layout(gtx, len(d.arvore), func(gtx layout.Context, i int) layout.Dimensions {
-				return d.grupo(gtx, d.arvore[i], 0, termo)
-			})
-		}),
-		layout.Rigid(d.rodape),
-	)
-}
-
-// hero: faixa de topo sem raio e sem margem, encostando nas bordas — um
-// cartão flutuante ali deixaria a página sem âncora (tema.py).
-func (d *dashTab) hero(gtx layout.Context) layout.Dimensions {
-	return layout.Stack{}.Layout(gtx,
-		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-			fundoHero(gtx, gtx.Constraints.Min)
-			return layout.Dimensions{Size: gtx.Constraints.Min}
-		}),
-		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.X = gtx.Constraints.Max.X
-			return layout.Inset{Top: 16, Bottom: 16, Left: 22, Right: 22}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-							layout.Rigid(negrito(txt(d.th, fonteMono, spHeroEyebrow, "PAINEL DE ACESSOS", tema.HeroSec)).Layout),
-							layout.Rigid(layout.Spacer{Height: 2}.Layout),
-							layout.Rigid(negrito(txt(d.th, fonteCond, spHeroTitulo, "Acessos", tema.HeroTxt)).Layout),
-							layout.Rigid(layout.Spacer{Height: 2}.Layout),
-							layout.Rigid(rotulo(d.th, fonteMono, spHeroSub, d.caminho, tema.HeroSec)),
-							layout.Rigid(layout.Spacer{Height: 1}.Layout),
-							layout.Rigid(rotulo(d.th, fonteMono, spHeroSub, "Desenvolvido por @JJMoratelli", tema.HeroSec)),
-						)
-					}),
-					layout.Rigid(d.numeros),
-				)
+				return layout.Inset{Left: margemPainel, Right: margemPainel}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return d.grupo(gtx, d.arvore[i], 0, termo)
+				})
 			})
 		}),
 	)
 }
 
-func (d *dashTab) numeros(gtx layout.Context) layout.Dimensions {
+// margemPainel é o recuo lateral de tudo o que mora na folha do Painel.
+const margemPainel = unit.Dp(28)
+
+// spMetaCard é o resumo dos protocolos no card. Não é o spCardMeta (9),
+// que outras telas usam para nota de rodapé: no card novo ele subiu.
+const spMetaCard = unit.Sp(10.5)
+
+// cabecalho é o cartão de boas-vindas, como o do painel da central do
+// ChamadoJá: saudação e resumo à esquerda, os números à direita e a malha
+// de hexágonos DENTRO do cartão, recortada nele e acesa à direita. Até a
+// 2.8 era um banner escuro; na primeira versão da 2.9, título e números
+// soltos na folha, com um vão vazio entre eles.
+func (d *dashTab) cabecalho(gtx layout.Context) layout.Dimensions {
+	return layout.Inset{Top: 20, Left: margemPainel, Right: margemPainel}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min.X = gtx.Constraints.Max.X
+		corpo := op.Record(gtx.Ops)
+		dims := layout.Inset{Top: 20, Bottom: 20, Left: 24, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(negrito(txt(d.th, fonteMono, unit.Sp(11), "MACHADÃO CORP · PAINEL DE ACESSOS", tema.Fraco)).Layout),
+						layout.Rigid(layout.Spacer{Height: 6}.Layout),
+						layout.Rigid(negrito(txt(d.th, fonteTitulo, unit.Sp(26), saudacao(gtx.Now), tema.Texto)).Layout),
+						layout.Rigid(layout.Spacer{Height: 6}.Layout),
+						layout.Rigid(txt(d.th, fonteSans, unit.Sp(13.5), d.resumo(), tema.Sec).Layout),
+					)
+				}),
+				layout.Rigid(layout.Spacer{Width: 24}.Layout),
+				layout.Rigid(d.estatisticas),
+			)
+		})
+		desenho := corpo.Stop()
+
+		sz := dims.Size
+		const raio = 16
+		sombra(gtx, sz, raio)
+		superficieVidro(gtx, sz, tema.CardTinta, transparente, raio)
+		rr := clip.UniformRRect(image.Rectangle{Max: sz}, gtx.Dp(raio))
+		molde := rr.Push(gtx.Ops)
+		// a luz do acento entrando pela direita, e a malha por cima dela
+		brilho := 0.15
+		if tema.Escuro {
+			brilho = 0.16
+		}
+		gradCSS(gtx, sz, 270, comAlfa(tema.AzulCheio, brilho), 0, transparente, 0.65)
+		lm := min(gtx.Dp(640), sz.X*62/100)
+		malhaCartao.desenharEm(gtx, lm, sz.Y, image.Pt(sz.X-lm, 0))
+		molde.Pop()
+		paint.FillShape(gtx.Ops, tema.CardBorda, clip.Stroke{Path: rr.Path(gtx.Ops), Width: 1}.Op())
+		desenho.Add(gtx.Ops)
+		return dims
+	})
+}
+
+// saudacao: "Bom dia" / "Boa tarde" / "Boa noite", com o primeiro nome de
+// quem usa o computador quando o sistema o tem.
+func saudacao(agora time.Time) string {
+	s := "Boa noite"
+	switch h := agora.Hour(); {
+	case h >= 5 && h < 12:
+		s = "Bom dia"
+	case h >= 12 && h < 18:
+		s = "Boa tarde"
+	}
+	if n := primeiroNome(); n != "" {
+		s += ", " + n
+	}
+	return s
+}
+
+// primeiroNome é o nome da saudação. Começa pelo login da variável de
+// ambiente (instantâneo) e é trocado pelo nome completo quando
+// carregarPrimeiroNome termina — numa goroutine, porque user.Current() pode
+// consultar o controlador de domínio no Windows (ou o LDAP no Linux) e,
+// fora da VPN, travaria o primeiro quadro do Painel por segundos.
+var nomeSaudacao atomic.Pointer[string]
+
+func primeiroNome() string {
+	if p := nomeSaudacao.Load(); p != nil {
+		return *p
+	}
+	login := os.Getenv("USER")
+	if login == "" {
+		login = os.Getenv("USERNAME")
+	}
+	return maiusculaInicial(login)
+}
+
+// carregarPrimeiroNome lê o usuário do sistema (o nome completo — o campo
+// GECOS no Linux, o nome de exibição no Windows — quando houver, senão o
+// login sem domínio) e chama pronto para a janela redesenhar.
+func carregarPrimeiroNome(pronto func()) {
+	go func() {
+		n := lerPrimeiroNome()
+		if n == "" {
+			return
+		}
+		nomeSaudacao.Store(&n)
+		if pronto != nil {
+			pronto()
+		}
+	}()
+}
+
+func lerPrimeiroNome() string {
+	u, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	nome := strings.TrimSpace(strings.Split(u.Name, ",")[0])
+	if campos := strings.Fields(nome); len(campos) > 0 {
+		nome = campos[0]
+	} else {
+		nome = u.Username
+		if i := strings.LastIndexAny(nome, `\/`); i >= 0 {
+			nome = nome[i+1:]
+		}
+	}
+	return maiusculaInicial(nome)
+}
+
+func maiusculaInicial(s string) string {
+	if s == "" {
+		return ""
+	}
+	r := []rune(s)
+	return strings.ToUpper(string(r[0])) + string(r[1:])
+}
+
+// resumo é a linha de baixo da saudação: o inventário e as sessões.
+func (d *dashTab) resumo() string {
+	sessoes := "nenhuma sessão aberta"
+	switch n := d.abertas(); {
+	case n == 1:
+		sessoes = "1 sessão aberta"
+	case n > 1:
+		sessoes = fmt.Sprintf("%d sessões abertas", n)
+	}
+	maquinas := fmt.Sprintf("%d máquinas", len(d.arq.Conexoes))
+	if len(d.arq.Conexoes) == 1 {
+		maquinas = "1 máquina"
+	}
+	grupos := fmt.Sprintf("%d grupos", d.contarGrupos())
+	if d.contarGrupos() == 1 {
+		grupos = "1 grupo"
+	}
+	return maquinas + " em " + grupos + " · " + sessoes
+}
+
+// contarGrupos conta os grupos de cima e os subgrupos diretos — a mesma
+// conta do número "GRUPOS".
+func (d *dashTab) contarGrupos() int {
+	n := 0
+	for _, g := range d.arvore {
+		n += 1 + len(g.Filhos)
+	}
+	return n
+}
+
+// nomeArquivo é só o nome do .ini, para a barra de status; o caminho
+// inteiro (que pode trazer até e-mail, quando a pasta é sincronizada) fica
+// nos Ajustes.
+func nomeArquivo(caminho string) string {
+	limpo := strings.ReplaceAll(caminho, "\\", "/")
+	return limpo[strings.LastIndex(limpo, "/")+1:]
+}
+
+// estatisticas: os números do inventário num cartão de vidro, um por
+// célula. O quadradinho de cor de tela/shell/rdp é a MESMA cor do ícone do
+// protocolo nos cards — serve de legenda sem precisar de uma.
+func (d *dashTab) estatisticas(gtx layout.Context) layout.Dimensions {
 	var maquinas, tela, shell, rdp int
 	for _, cx := range d.arq.Conexoes {
 		maquinas++
@@ -392,42 +560,64 @@ func (d *dashTab) numeros(gtx layout.Context) layout.Dimensions {
 			rdp++
 		}
 	}
-	grupos := 0
-	for _, g := range d.arvore {
-		grupos += 1 + len(g.Filhos)
+	grupos := d.contarGrupos()
+	type numero struct {
+		n   int
+		rot string
+		cor color.NRGBA
 	}
-
-	col := func(n int, cap string) layout.FlexChild {
-		return layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Left: 13, Right: 13}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
-					layout.Rigid(negrito(txt(d.th, fonteCond, spHeroNum, fmt.Sprint(n), tema.HeroTxt)).Layout),
-					layout.Rigid(rotulo(d.th, fonteMono, spHeroCap, cap, tema.HeroSec)),
-				)
-			})
-		})
+	nums := []numero{
+		{maquinas, "MÁQUINAS", tema.Borda2},
+		{tela, "TELA", tema.Azul},
+		{shell, "SHELL", tema.Verde},
+		{rdp, "RDP", tema.Roxo},
+		{grupos, "GRUPOS", tema.Borda2},
+		{d.abertas(), "ABERTAS", tema.AzulCheio},
 	}
-	// risco vertical separando os números, bem apagado (.hero-risco)
-	risco := layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-		h := gtx.Dp(34)
-		c := tema.HeroTxt
-		c.A = 36 // opacity 0.14
-		paint.FillShape(gtx.Ops, c, clip.Rect{Max: image.Pt(1, h)}.Op())
-		return layout.Dimensions{Size: image.Pt(1, h)}
-	})
-
-	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-		col(maquinas, "MÁQUINAS"), risco,
-		col(tela, "TELA"), risco,
-		col(shell, "SHELL"), risco,
-		col(rdp, "RDP"), risco,
-		col(grupos, "GRUPOS"), risco,
-		col(d.abertas(), "ABERTAS"),
-	)
+	var filhos []layout.FlexChild
+	for i, n := range nums {
+		i, n := i, n
+		filhos = append(filhos, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Stack{}.Layout(gtx,
+				layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+					if i > 0 { // fio entre as células
+						paint.FillShape(gtx.Ops, tema.CardBorda, clip.Rect{Max: image.Pt(1, gtx.Constraints.Min.Y)}.Op())
+					}
+					return layout.Dimensions{Size: gtx.Constraints.Min}
+				}),
+				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Top: 10, Bottom: 11, Left: 18, Right: 18}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+							layout.Rigid(negrito(txt(d.th, fonteTitulo, unit.Sp(24), fmt.Sprint(n.n), tema.Texto)).Layout),
+							layout.Rigid(layout.Spacer{Height: 3}.Layout),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										lado := gtx.Dp(8)
+										rr := clip.UniformRRect(image.Rectangle{Max: image.Pt(lado, lado)}, gtx.Dp(3))
+										paint.FillShape(gtx.Ops, n.cor, rr.Op(gtx.Ops))
+										return layout.Dimensions{Size: image.Pt(lado, lado)}
+									}),
+									layout.Rigid(layout.Spacer{Width: 6}.Layout),
+									layout.Rigid(txt(d.th, fonteMono, unit.Sp(10.5), n.rot, tema.Sec).Layout),
+								)
+							}),
+						)
+					})
+				}),
+			)
+		}))
+	}
+	corpo := op.Record(gtx.Ops)
+	dims := layout.Flex{Axis: layout.Horizontal}.Layout(gtx, filhos...)
+	desenho := corpo.Stop()
+	// dentro do cartão de boas-vindas: mais sólido que ele, para os
+	// números não ficarem em cima da malha
+	superficie(gtx, dims.Size, tema.CardTintaH, tema.CardBorda, 14)
+	desenho.Add(gtx.Ops)
+	return dims
 }
 
-// barraFiltro fica sobre a lista rolando, então usa VIDRO e não a cor do
-// fundo — com fundo chapado ela sumiria dentro da página (tema.py).
 // CampoBusca é o campo de filtro, desenhado ou na lateral ou no próprio
 // painel — nunca nos dois ao mesmo tempo (um widget.Editor só pode ser
 // desenhado uma vez por frame). Quem decide é main.go, olhando o estado
@@ -436,6 +626,10 @@ func (d *dashTab) CampoBusca(gtx layout.Context) layout.Dimensions {
 	return d.caixaBusca(gtx, &d.filtroLateral)
 }
 
+// barraFiltro é a barra do Painel: o filtro (quando ele não está na
+// lateral), recolher/expandir e, à direita, as duas ações sobre o
+// inventário — "Nova conexão", a principal da tela, e "Recarregar INI".
+// As duas moravam no topo até a 2.8, miúdas e do mesmo peso de tudo lá.
 func (d *dashTab) barraFiltro(gtx layout.Context) layout.Dimensions {
 	for d.btnRecolher.Clicked(gtx) {
 		d.expandir = map[string]bool{}
@@ -446,16 +640,47 @@ func (d *dashTab) barraFiltro(gtx layout.Context) layout.Dimensions {
 	if d.btnNova.Clicked(gtx) && d.aoNova != nil {
 		d.aoNova("")
 	}
-	return layout.Inset{Top: 10, Bottom: 6, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	if d.btnRecarregar.Clicked(gtx) && d.recarregar != nil {
+		d.recarregar()
+	}
+	naLateral := d.buscaNaLateral != nil && d.buscaNaLateral()
+	return layout.Inset{Top: 20, Bottom: 12, Left: margemPainel, Right: margemPainel}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-			layout.Flexed(1, d.campoFiltro),
-			layout.Rigid(layout.Spacer{Width: 8}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoBarra(gtx, d.th, &d.btnRecolher, "recolher tudo")
+				if naLateral {
+					return layout.Dimensions{}
+				}
+				// encolhe com a folha: numa janela estreita é ela que cede,
+				// não o "Nova conexão", o último da linha
+				larg := min(gtx.Dp(440), gtx.Constraints.Max.X*35/100)
+				gtx.Constraints.Min.X, gtx.Constraints.Max.X = larg, larg
+				return layout.Inset{Right: 10}.Layout(gtx, d.campoFiltro)
 			}),
-			layout.Rigid(layout.Spacer{Width: 6}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoBarra(gtx, d.th, &d.btnExpandir, "expandir tudo")
+				btns := []*widget.Clickable{&d.btnRecolher, &d.btnExpandir}
+				rots := []string{"Recolher tudo", "Expandir tudo"}
+				return trilho(gtx, 2, -1, btns, func(gtx layout.Context, i int, _, hover bool) layout.Dimensions {
+					cor := tema.Sec
+					if hover {
+						cor = tema.Texto
+					}
+					// 3 + 34 + 3 = alturaBarra
+					gtx.Constraints.Min.Y = gtx.Dp(alturaBarra) - gtx.Dp(6)
+					return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Left: 12, Right: 12}.Layout(gtx,
+							txt(d.th, fonteSansMedia, unit.Sp(13), rots[i], cor).Layout)
+					})
+				})
+			}),
+			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+				return layout.Dimensions{Size: image.Pt(gtx.Constraints.Min.X, 0)}
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return botaoAcao(gtx, d.th, &d.btnRecarregar, icons.NavigationRefresh, "Recarregar INI", false)
+			}),
+			layout.Rigid(layout.Spacer{Width: 10}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return botaoAcao(gtx, d.th, &d.btnNova, icons.ContentAdd, "Nova conexão", true)
 			}),
 		)
 	})
@@ -480,7 +705,8 @@ func (d *dashTab) campoFiltro(gtx layout.Context) layout.Dimensions {
 }
 
 func (d *dashTab) caixaBusca(gtx layout.Context, ed *widget.Editor) layout.Dimensions {
-	marcarFoco(gtx.Focused(ed))
+	focado := gtx.Focused(ed)
+	marcarFoco(focado)
 	// Enter no campo: se o que está escrito não achou nada, trata como
 	// DESTINO e conecta sem cadastrar (ver efemera.go). É o caminho de
 	// "me passaram um IP no chat".
@@ -493,77 +719,116 @@ func (d *dashTab) caixaBusca(gtx layout.Context, ed *widget.Editor) layout.Dimen
 			d.aoEfemera(ed.Text())
 		}
 	}
-	return layout.Inset{}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Stack{}.Layout(gtx,
-			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				// Campo SÓLIDO, não vidro: com o fundo mais cheio de
-				// desenho (faixas diagonais), transparência aqui deixava
-				// o texto digitado difícil de ler por cima.
-				superficie(gtx, gtx.Constraints.Min, tema.Campo, tema.LuzB, 8)
-				return layout.Dimensions{Size: gtx.Constraints.Min}
-			}),
-			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				gtx.Constraints.Min.X = gtx.Constraints.Max.X
-				return layout.Inset{Top: 7, Bottom: 7, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return icone(gtx, icons.ActionSearch, tema.Fraco, 16)
-						}),
-						layout.Rigid(layout.Spacer{Width: 8}.Layout),
-						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-							es := material.Editor(d.th, ed, "filtrar máquinas, hosts ou grupos...")
-							es.Font = fonteMono
-							es.TextSize = spCorpo
-							es.Color = tema.Texto
-							es.HintColor = tema.Fraco
-							return es.Layout(gtx)
-						}),
-					)
-				})
-			}),
-		)
-	})
-}
-
-func (d *dashTab) rodape(gtx layout.Context) layout.Dimensions {
+	// Na lateral o campo é mais baixo e sem borda (a moldura em volta já o
+	// separa); no Painel ele é o vidro da folha, com borda.
+	naLateral := ed == &d.filtroLateral
+	alt, raio := gtx.Dp(alturaBarra), unit.Dp(12)
+	fundo, borda := tema.CardTinta, tema.CardBorda
+	tam := unit.Sp(14)
+	if naLateral {
+		alt, raio = gtx.Dp(36), 11
+		fundo, borda = tinta(tema.TopoTxt, 0.06), transparente
+		tam = 13
+	}
 	return layout.Stack{}.Layout(gtx,
 		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
 			size := gtx.Constraints.Min
-			faixaFosca(gtx, d.th, size)
-			paint.FillShape(gtx.Ops, tema.Borda, clip.Rect{Max: image.Pt(size.X, 1)}.Op())
+			if focado {
+				// anel de foco de 3dp na cor de acento, por fora
+				anel := gtx.Dp(3)
+				rr := clip.UniformRRect(image.Rect(-anel, -anel, size.X+anel, size.Y+anel), gtx.Dp(raio)+anel)
+				paint.FillShape(gtx.Ops, comAlfa(tema.AzulCheio, 0.2), rr.Op(gtx.Ops))
+				fundo, borda = tema.CardTintaH, comAlfa(tema.AzulCheio, 0.55)
+			}
+			superficie(gtx, size, fundo, borda, raio)
 			return layout.Dimensions{Size: size}
 		}),
 		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints.Min.X = gtx.Constraints.Max.X
-			return layout.Inset{Top: 5, Bottom: 5, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				if d.btnSobre.Clicked(gtx) {
-					abrirSobre()
-				}
-				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return d.btnSobre.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							// Sec, não Fraco: o rodapé mora na base da janela,
-							// onde o fundo claro é mais escuro, e o Fraco ali
-							// ficava abaixo de 3:1 sobre a barra fosca.
-							cor := tema.Sec
-							if d.btnSobre.Hovered() {
-								cor = tema.Texto
-							}
-							return rotulo(d.th, fonteMono, spRodape, "Acessos "+versaoInstalada(), cor)(gtx)
-						})
-					}),
-					layout.Rigid(layout.Spacer{Width: 12}.Layout),
-					layout.Flexed(1, rotulo(d.th, fonteMono, spRodape, d.caminho, tema.Sec)),
-					layout.Rigid(rotulo(d.th, fonteMono, spRodape,
-						fmt.Sprintf("%d máquinas", len(d.arq.Conexoes)), tema.Sec)),
-				)
+			gtx.Constraints.Min.Y = alt
+			return layout.Inset{Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return centroV(gtx, func(gtx layout.Context) layout.Dimensions {
+					return d.linhaBusca(gtx, ed, naLateral, tam)
+				})
 			})
 		}),
 	)
 }
 
-// grupo desenha a linha do grupo (trilho + nome + contagem) e, se aberto,
-// os filhos e os cards.
+func (d *dashTab) linhaBusca(gtx layout.Context, ed *widget.Editor, naLateral bool, tam unit.Sp) layout.Dimensions {
+	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			cor := tema.Fraco
+			if naLateral {
+				cor = tema.TopoSec // na moldura o Fraco fica abaixo de 3:1
+			}
+			return icone(gtx, icons.ActionSearch, cor, 17)
+		}),
+		layout.Rigid(layout.Spacer{Width: 10}.Layout),
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			dica := "Filtrar máquinas, hosts ou grupos"
+			if naLateral {
+				dica = "Filtrar máquinas"
+			}
+			es := material.Editor(d.th, ed, dica)
+			es.Font = fonteSans
+			es.TextSize = tam
+			es.Color = tema.Texto
+			es.HintColor = tema.Fraco
+			if naLateral {
+				es.HintColor = tema.TopoSec
+			}
+			return es.Layout(gtx)
+		}),
+	)
+}
+
+// barraStatus é a faixa de baixo da janela, na moldura, quando o Painel
+// está à vista: versão (clicar abre o Sobre), o arquivo, e as contagens.
+func (d *dashTab) barraStatus(gtx layout.Context) layout.Dimensions {
+	if d.btnSobre.Clicked(gtx) {
+		abrirSobre()
+	}
+	alt := gtx.Dp(statusAltura)
+	gtx.Constraints.Min.Y, gtx.Constraints.Max.Y = alt, alt
+	larg := gtx.Constraints.Max.X
+	paint.FillShape(gtx.Ops, tema.MolduraLinha, clip.Rect{Max: image.Pt(larg, 1)}.Op())
+	arq := nomeArquivo(d.caminho)
+	return layout.Inset{Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min.X = gtx.Constraints.Max.X
+		return centroV(gtx, func(gtx layout.Context) layout.Dimensions {
+			return d.itensStatus(gtx, arq)
+		})
+	})
+}
+
+func (d *dashTab) itensStatus(gtx layout.Context, arq string) layout.Dimensions {
+	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return d.btnSobre.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				pointer.CursorPointer.Add(gtx.Ops)
+				cor := tema.TopoSec
+				if d.btnSobre.Hovered() {
+					cor = tema.TopoTxt
+				}
+				return rotulo(d.th, fonteMono, spRodape, nomeApp+" "+versaoInstalada(), cor)(gtx)
+			})
+		}),
+		layout.Rigid(layout.Spacer{Width: 14}.Layout),
+		layout.Rigid(rotulo(d.th, fonteMono, spRodape, arq, tema.TopoSec)),
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			return layout.Dimensions{Size: image.Pt(gtx.Constraints.Min.X, 0)}
+		}),
+		layout.Rigid(rotulo(d.th, fonteMono, spRodape,
+			fmt.Sprintf("%d máquinas · %d abertas", len(d.arq.Conexoes), d.abertas()), tema.TopoSec)),
+		layout.Rigid(layout.Spacer{Width: 14}.Layout),
+		layout.Rigid(rotulo(d.th, fonteMono, spRodape, "@JJMoratelli", tema.TopoSec)),
+	)
+}
+
+// grupo desenha a linha do grupo e, se aberto, os filhos e os cards — os
+// filhos recuados, com um fio vertical à esquerda ligando-os ao grupo
+// (o "ramo"), em vez do recuo solto de antes.
 func (d *dashTab) grupo(gtx layout.Context, g *conexoes.Grupo, nivel int, termo string) layout.Dimensions {
 	chave := strings.Join(g.Caminho, ";")
 	visiveis := filtrar(g.Conexoes, termo)
@@ -586,13 +851,7 @@ func (d *dashTab) grupo(gtx layout.Context, g *conexoes.Grupo, nivel int, termo 
 		d.grupoSobCursor = chave
 	}
 
-	filhos := []layout.FlexChild{
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return d.linhaGrupo(gtx, g, nivel, aberto, btn.Hovered())
-			})
-		}),
-	}
+	var filhos []layout.FlexChild
 	if aberto {
 		for _, f := range g.Filhos {
 			f := f
@@ -602,114 +861,145 @@ func (d *dashTab) grupo(gtx layout.Context, g *conexoes.Grupo, nivel int, termo 
 		}
 		if len(visiveis) > 0 {
 			filhos = append(filhos, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{
-					Left: unit.Dp(14 + 16*float32(nivel)), Right: 14, Top: 4, Bottom: 12,
-				}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: 4, Bottom: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return d.grade(gtx, visiveis)
 				})
 			}))
 		}
 	}
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, filhos...)
-}
 
-func (d *dashTab) linhaGrupo(gtx layout.Context, g *conexoes.Grupo, nivel int, aberto, hover bool) layout.Dimensions {
-	seta := setaExpansor(aberto)
-	cor := corCategoria(g.Caminho[0])
-	tamNome := spGrupoTitulo
-	corNome := tema.Texto
-	if nivel > 0 {
-		tamNome = spSubgrupo
-		corNome = tema.Sec
-	}
-
-	return layout.Stack{}.Layout(gtx,
-		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-			if hover {
-				superficie(gtx, gtx.Constraints.Min, tema.Vidro1, transparente, 7)
-			}
-			return layout.Dimensions{Size: gtx.Constraints.Min}
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return d.linhaGrupo(gtx, g, nivel, aberto, btn.Hovered())
+			})
 		}),
-		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.X = gtx.Constraints.Max.X
-			return layout.Inset{
-				Top: 5, Bottom: 5,
-				Left:  unit.Dp(12 + 16*float32(nivel)),
-				Right: 14,
-			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					// Selecionar o grupo inteiro de uma vez: com 40 caixas
-					// por loja, marcar uma a uma não é opção. O estado
-					// PARCIAL existe porque "algumas selecionadas" não é
-					// nem marcado nem desmarcado.
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return d.caixaGrupo(gtx, g)
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if len(filhos) == 0 {
+				return layout.Dimensions{}
+			}
+			return layout.Inset{Left: 7}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Stack{}.Layout(gtx,
+					layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+						paint.FillShape(gtx.Ops, tema.CardBorda, clip.Rect{Max: image.Pt(1, gtx.Constraints.Min.Y)}.Op())
+						return layout.Dimensions{Size: gtx.Constraints.Min}
 					}),
-					layout.Rigid(layout.Spacer{Width: 7}.Layout),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return icone(gtx, seta, tema.Sec, 18)
+					layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Left: 18}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Flex{Axis: layout.Vertical}.Layout(gtx, filhos...)
+						})
 					}),
-					layout.Rigid(layout.Spacer{Width: 4}.Layout),
-					// trilho da categoria: 3px SEMPRE presentes (transparente
-					// quando não se aplica), senão o texto desloca entre
-					// estados — regra dura da skill.
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						w, h := gtx.Dp(3), gtx.Dp(18)
-						rr := clip.UniformRRect(image.Rectangle{Max: image.Pt(w, h)}, gtx.Dp(2))
-						paint.FillShape(gtx.Ops, cor, rr.Op(gtx.Ops))
-						return layout.Dimensions{Size: image.Pt(w, h)}
-					}),
-					layout.Rigid(layout.Spacer{Width: 8}.Layout),
-					layout.Rigid(negrito(txt(d.th, fonteCond, tamNome, g.Nome, corNome)).Layout),
-					layout.Rigid(layout.Spacer{Width: 7}.Layout),
-					layout.Rigid(rotulo(d.th, fonteMono, spGrupoCont, fmt.Sprint(g.Total()), tema.Fraco)),
 				)
 			})
 		}),
 	)
 }
 
-// grade quebra os cards em linhas conforme a largura disponível.
+// linhaGrupo: caixa de seleção do grupo, seta, a marca de cor (hexágono,
+// só no grupo de cima), o nome e o contador. Sob o mouse o nome ganha a
+// cor de acento, sem fundo — o fundo antigo piscava a linha inteira.
+func (d *dashTab) linhaGrupo(gtx layout.Context, g *conexoes.Grupo, nivel int, aberto, hover bool) layout.Dimensions {
+	seta := setaExpansor(aberto)
+	corNome := tema.Texto
+	if hover {
+		corNome = tema.Azul
+	}
+	nome := negrito(txt(d.th, fonteTitulo, spGrupoTitulo, g.Nome, corNome))
+	alt := gtx.Dp(40)
+	if nivel > 0 {
+		f := fonteSans
+		f.Weight = font.SemiBold
+		nome = txt(d.th, f, unit.Sp(14.5), g.Nome, corNome)
+		alt = gtx.Dp(36)
+	}
+	gtx.Constraints.Min.X = gtx.Constraints.Max.X
+	gtx.Constraints.Min.Y = alt
+	pointer.CursorPointer.Add(gtx.Ops)
+	return centroV(gtx, func(gtx layout.Context) layout.Dimensions {
+		return d.linhaGrupoItens(gtx, g, nivel, seta, nome)
+	})
+}
+
+func (d *dashTab) linhaGrupoItens(gtx layout.Context, g *conexoes.Grupo, nivel int,
+	seta *widget.Icon, nome material.LabelStyle) layout.Dimensions {
+	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+		// Selecionar o grupo inteiro de uma vez: com 40 caixas por loja,
+		// marcar uma a uma não é opção. O estado PARCIAL existe porque
+		// "algumas selecionadas" não é nem marcado nem desmarcado.
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return d.caixaGrupo(gtx, g)
+		}),
+		layout.Rigid(layout.Spacer{Width: 10}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return icone(gtx, seta, tema.Sec, 17)
+		}),
+		layout.Rigid(layout.Spacer{Width: 8}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if nivel > 0 {
+				return layout.Dimensions{}
+			}
+			return layout.Inset{Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return hexagono(gtx, gtx.Dp(14), corCategoria(g.Caminho[0]))
+			})
+		}),
+		layout.Rigid(nome.Layout),
+		layout.Rigid(layout.Spacer{Width: 10}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return contador(gtx, d.th, fmt.Sprint(g.Total()))
+		}),
+	)
+}
+
+// grade quebra os cards em linhas conforme a largura disponível. Os cards
+// ESTICAM para ocupar a linha inteira (como o auto-fill de uma grade CSS),
+// com largura mínima cardLargura: a borda direita da grade fica alinhada
+// com a da barra de cima, em vez da sobra irregular de antes.
 func (d *dashTab) grade(gtx layout.Context, lista []conexoes.Conexao) layout.Dimensions {
-	larg := gtx.Dp(cardLargura)
-	esp := gtx.Dp(10)
-	porLinha := max(1, (gtx.Constraints.Max.X+esp)/(larg+esp))
+	minimo := gtx.Dp(cardLargura)
+	esp := gtx.Dp(12)
+	total := gtx.Constraints.Max.X
+	porLinha := max(1, (total+esp)/(minimo+esp))
+	// A divisão inteira joga fora até porLinha-1 px; eles vão, um a um,
+	// para os primeiros cards da linha, senão a borda direita da grade
+	// fica alguns px aquém da das ações acima dela.
+	util := total - esp*(porLinha-1)
+	larg, resto := util/porLinha, util%porLinha
+	alt := gtx.Dp(cardAltura)
 
 	var linhas []layout.FlexChild
 	for i := 0; i < len(lista); i += porLinha {
 		fatia := lista[i:min(i+porLinha, len(lista))]
-		linhas = append(linhas,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				var cols []layout.FlexChild
-				for _, cx := range fatia {
-					cx := cx
-					cols = append(cols,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							// card QUADRADO: mesma medida nos dois eixos, então
-							// a grade fica regular independente de quantas
-							// linhas de meta cada conexão tem.
-							gtx.Constraints.Min = image.Pt(larg, larg)
-							gtx.Constraints.Max = image.Pt(larg, larg)
-							return d.card(gtx, cx)
-						}),
-						layout.Rigid(layout.Spacer{Width: 10}.Layout),
-					)
+		if i > 0 {
+			linhas = append(linhas, layout.Rigid(layout.Spacer{Height: 12}.Layout))
+		}
+		linhas = append(linhas, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			var cols []layout.FlexChild
+			for j, cx := range fatia {
+				cx := cx
+				if j > 0 {
+					cols = append(cols, layout.Rigid(layout.Spacer{Width: 12}.Layout))
 				}
-				return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, cols[:len(cols)-1]...)
-			}),
-			layout.Rigid(layout.Spacer{Height: 10}.Layout),
-		)
+				l := larg
+				if j < resto {
+					l++
+				}
+				cols = append(cols, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					gtx.Constraints.Min = image.Pt(l, alt)
+					gtx.Constraints.Max = image.Pt(l, alt)
+					return d.card(gtx, cx)
+				}))
+			}
+			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, cols...)
+		}))
 	}
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, linhas...)
 }
 
-// card: vidro fosco (superficieVidro) — o fundo da janela desfocado atrás,
-// tinta fina por cima. Como o fundo tem gradiente, o mesmo card não fica
-// idêntico no topo e na base da lista, e é isso que o olho lê como vidro.
-// Em repouso a borda é de luz (clara em cima, apagando para baixo); no
-// hover a tinta engrossa e a borda vira Borda2.
+// card: vidro fosco (superficieVidro) sobre a folha, com borda; sob o mouse
+// a tinta engrossa e a borda puxa para o azul. Dois blocos ancorados:
+// identidade em cima (nome e caixa de seleção; o host com o ponto de
+// vida), e embaixo o resumo dos protocolos e o trilho com os quatro.
 func (d *dashTab) card(gtx layout.Context, cx conexoes.Conexao) layout.Dimensions {
-	cor := corCategoria(cx.Grupo[0])
 	hov := d.clique("card:" + cx.GrupoStr() + "|" + cx.Nome)
 
 	if hov.Hovered() {
@@ -719,71 +1009,58 @@ func (d *dashTab) card(gtx layout.Context, cx conexoes.Conexao) layout.Dimension
 		// serve de identidade para a dica sem inventar outra.
 		pedirDica("card:"+cx.GrupoStr()+"|"+cx.Nome, cx.Descricao)
 	}
+	marcado := d.selecionada(cx)
 
 	// A sombra fica FORA do Clickable: ele recorta o que desenha no
 	// tamanho do card (é o recorte da área de clique), e a sombra, que
-	// mora justamente fora do card, sumia inteira — a antiga só
-	// escurecia o próprio card por dentro.
+	// mora justamente fora do card, sumia inteira.
 	corpo := op.Record(gtx.Ops)
 	dims := hov.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Stack{}.Layout(gtx,
 			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
 				size := gtx.Constraints.Min
-				// Hover em transição (anima.go): a tinta engrossa e a
-				// Borda2 aparece por cima da borda de luz aos poucos.
+				// Hover em transição (anima.go): a tinta engrossa e a borda
+				// puxa para o azul aos poucos.
 				h := progressoHover(gtx, hov, hov.Hovered())
-				borda := tema.Borda2
-				borda.A = uint8(float32(borda.A)*h + 0.5)
-				superficieVidro(gtx, size, misturarCor(tema.VidroTinta, tema.VidroTintaH, h), borda, cardRaio)
-				// Trilho da categoria na borda esquerda, recortado pelo
-				// MOLDE do card: sem esse recorte a faixa passava por fora
-				// do canto arredondado — era o vazamento da borda.
-				molde := clip.UniformRRect(image.Rectangle{Max: size}, gtx.Dp(cardRaio)).Push(gtx.Ops)
-				paint.FillShape(gtx.Ops, cor, clip.Rect{Max: image.Pt(gtx.Dp(3), size.Y)}.Op())
-				molde.Pop()
+				borda := misturarCor(tema.CardBorda, misturarCor(tema.CardBorda, tema.AzulCheio, 0.45), h)
+				if marcado {
+					borda = tema.AzulCheio
+				}
+				superficieVidro(gtx, size, misturarCor(tema.CardTinta, tema.CardTintaH, h), borda, cardRaio)
 				return layout.Dimensions{Size: size}
 			}),
 			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				// O conteúdo OCUPA o quadrado inteiro. Sem isto o card
-				// desenhava só a altura do texto enquanto a linha da grade
-				// continuava com a altura do quadrado — era daí que vinha
-				// aquele rasgo vazio entre uma fileira e a seguinte.
+				// O conteúdo OCUPA o card inteiro, para o rodapé (resumo e
+				// trilho) ficar sempre encostado embaixo.
 				gtx.Constraints.Min = gtx.Constraints.Max
-				return layout.Inset{Top: 11, Bottom: 10, Left: 12, Right: 11}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: 12, Bottom: 10, Left: 14, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-						// Dois blocos ancorados: identidade no topo,
-						// meta + protocolos no rodapé. O card é quadrado e
-						// quase sempre sobra altura; deixar a folga SOLTA no
-						// meio faz cada card parecer de um tamanho, e é isso
-						// que dava a sensação de desproporção.
-						// nome + marca de lote na MESMA linha: a caixinha
-						// entra à esquerda do nome, como no app original, e
-						// o host fica alinhado com o nome logo abaixo.
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+									l := negrito(txt(d.th, fonteTitulo, spCardNome, cx.Nome, tema.Texto))
+									l.MaxLines = 1
+									return l.Layout(gtx)
+								}),
+								layout.Rigid(layout.Spacer{Width: 8}.Layout),
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return d.caixaSelecao(gtx, cx)
-								}),
-								layout.Rigid(layout.Spacer{Width: 7}.Layout),
-								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-									return negrito(txt(d.th, fonteCond, spCardNome, cx.Nome, tema.Texto)).Layout(gtx)
 								}),
 							)
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return layout.Inset{Left: 22}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								// O estado de vida SUBLINHA o host: é o dado
-								// a que ele se refere. Verde respondeu,
-								// vermelho não; sem linha = ainda não
-								// perguntei, que é diferente de "está fora".
-								dims := rotulo(d.th, fonteMono, spCardHost, cx.Host, tema.Sec)(gtx)
-								if cv, mostra := corDaVida(d.estadoVida(cx)); mostra {
-									alt := gtx.Dp(2)
-									y := dims.Size.Y - alt
-									rr := clip.UniformRRect(image.Rect(0, y, dims.Size.X, y+alt), gtx.Dp(1))
-									paint.FillShape(gtx.Ops, cv, rr.Op(gtx.Ops))
-								}
-								return dims
+							// O ponto de vida vem ANTES do host, que é o dado
+							// a que ele se refere. Verde respondeu, vermelho
+							// não; só o contorno = ainda não perguntei.
+							cv, mostra := corDaVida(d.estadoVida(cx))
+							return layout.Inset{Top: 5}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return pontoVida(gtx, cv, mostra)
+									}),
+									layout.Rigid(layout.Spacer{Width: 5}.Layout),
+									layout.Flexed(1, rotulo(d.th, fonteMono, spCardHost, cx.Host, tema.Sec)),
+								)
 							})
 						}),
 						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
@@ -792,7 +1069,7 @@ func (d *dashTab) card(gtx layout.Context, cx conexoes.Conexao) layout.Dimension
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							return d.meta(gtx, cx)
 						}),
-						layout.Rigid(layout.Spacer{Height: 7}.Layout),
+						layout.Rigid(layout.Spacer{Height: 10}.Layout),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							return d.botoes(gtx, cx)
 						}),
@@ -823,32 +1100,37 @@ func (d *dashTab) cardRascunho(gtx layout.Context, termo string) layout.Dimensio
 	if !ok {
 		return layout.Dimensions{}
 	}
-	larg := gtx.Dp(cardLargura)
-	return layout.Inset{Left: 14, Right: 14, Bottom: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = image.Pt(larg, larg)
-		gtx.Constraints.Max = image.Pt(larg, larg)
+	larg, alt := gtx.Dp(cardLargura)+gtx.Dp(12), gtx.Dp(cardAltura)
+	return layout.Inset{Left: margemPainel, Right: margemPainel, Bottom: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min = image.Pt(larg, alt)
+		gtx.Constraints.Max = image.Pt(larg, alt)
 		return layout.Stack{}.Layout(gtx,
 			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
 				size := gtx.Constraints.Min
 				sombra(gtx, size, cardRaio)
-				// borda na cor do assunto (e não a borda neutra dos cards
-				// salvos): é o que diz, sem legenda, que este card não
-				// está no inventário.
-				superficieVidro(gtx, size, tema.VidroTinta, tema.Azul, cardRaio)
+				// borda na cor de acento (e não a neutra dos cards salvos):
+				// é o que diz, sem legenda, que este card não está no
+				// inventário.
+				superficieVidro(gtx, size, tema.CardTintaH, tema.AzulCheio, cardRaio)
 				return layout.Dimensions{Size: size}
 			}),
 			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 				gtx.Constraints.Min = gtx.Constraints.Max
-				return layout.Inset{Top: 11, Bottom: 10, Left: 12, Right: 11}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: 12, Bottom: 10, Left: 14, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-						layout.Rigid(negrito(txt(d.th, fonteCond, spCardNome, cx.Host, tema.Texto)).Layout),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							l := negrito(txt(d.th, fonteTitulo, spCardNome, cx.Host, tema.Texto))
+							l.MaxLines = 1
+							return l.Layout(gtx)
+						}),
+						layout.Rigid(layout.Spacer{Height: 4}.Layout),
 						layout.Rigid(rotulo(d.th, fonteMono, spCardHost, "não cadastrado", tema.Sec)),
 						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 							return layout.Dimensions{Size: gtx.Constraints.Min}
 						}),
-						layout.Rigid(rotulo(d.th, fonteMono, spCardMeta,
-							"sessão temporária", tema.Fraco)),
-						layout.Rigid(layout.Spacer{Height: 7}.Layout),
+						layout.Rigid(rotulo(d.th, fonteMono, spMetaCard,
+							"sessão temporária", tema.CardFraco)),
+						layout.Rigid(layout.Spacer{Height: 10}.Layout),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							return d.botoesCom(gtx, cx, func(p conexoes.Protocolo) {
 								if d.aoRascunho != nil {
@@ -864,11 +1146,19 @@ func (d *dashTab) cardRascunho(gtx layout.Context, termo string) layout.Dimensio
 }
 
 // meta são as linhas apagadas com o resumo de cada protocolo configurado
-// ("tela 5900 · encaixar · auto"), como no card do app original.
+// ("tela 5900 · encaixar · auto"), como no card do app original. No
+// máximo duas: o card tem altura fixa, e a terceira empurraria o trilho.
 func (d *dashTab) meta(gtx layout.Context, cx conexoes.Conexao) layout.Dimensions {
 	var linhas []layout.FlexChild
 	add := func(s string) {
-		linhas = append(linhas, layout.Rigid(rotulo(d.th, fonteMono, spCardMeta, s, tema.CardFraco)))
+		if len(linhas) == 2 {
+			return
+		}
+		linhas = append(linhas, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			l := txt(d.th, fonteMono, spMetaCard, s, tema.CardFraco)
+			l.MaxLines = 1
+			return l.Layout(gtx)
+		}))
 	}
 	if cx.Tem(conexoes.VNC) {
 		s := fmt.Sprintf("tela %d · %s", cx.VNC.Porta, cx.VNC.Modo)
@@ -905,14 +1195,19 @@ func (d *dashTab) botoes(gtx layout.Context, cx conexoes.Conexao) layout.Dimensi
 	return d.botoesCom(gtx, cx, nil)
 }
 
-// botoesCom é a fileira de ícones de protocolo. aoClicar != nil troca o
+// botoesCom é o trilho de protocolos do card. aoClicar != nil troca o
 // que o clique faz — é o que o card temporário usa para passar antes pelo
 // diálogo de credenciais, já que um destino não cadastrado não tem senha
 // guardada em lugar nenhum.
+//
+// Desde a 2.9 é um trilho afundado com os quatro segmentos: o protocolo
+// configurado fica EM RELEVO, com o ícone na cor dele; o que não está
+// configurado fica rente ao trilho, apagado. Antes cada configurado tinha
+// um fundo colorido próprio, e uma fileira de cards virava um confete.
 func (d *dashTab) botoesCom(gtx layout.Context, cx conexoes.Conexao,
 	aoClicar func(conexoes.Protocolo)) layout.Dimensions {
 	var filhos []layout.FlexChild
-	for _, e := range protocolos {
+	for i, e := range protocolos {
 		e := e
 		ligado := cx.Tem(e.p)
 		btn := d.clique(fmt.Sprintf("%s|%s|%s", cx.GrupoStr(), cx.Nome, e.p))
@@ -931,40 +1226,46 @@ func (d *dashTab) botoesCom(gtx layout.Context, cx conexoes.Conexao,
 
 		conteudo := func(gtx layout.Context) layout.Dimensions {
 			// largura = a fatia inteira que o Flexed deu, pra os quatro
-			// slots cobrirem o comprimento da linha do card.
+			// segmentos cobrirem o trilho.
 			size := image.Pt(gtx.Constraints.Max.X, gtx.Dp(icoAltura))
 			gtx.Constraints.Min = size
-
-			// Caixa SEMPRE do mesmo tamanho, em qualquer estado: o que muda
-			// é só cor. Configurado ganha o fundo tênue e o glifo na cor do
-			// protocolo; não configurado fica apagado e inerte, mas continua
-			// ocupando o slot — ícone que aparece e some obriga a reler o
-			// cartão toda vez (gtk.md §6).
-			fundo, borda, cor := tema.Vidro2, tema.LuzB, tema.Fraco
+			cor := comAlfa(tema.Fraco, 0.45)
 			if ligado {
-				fundo, cor, borda = e.fundo(), e.cor(), transparente
+				cor = e.cor()
+				fundo := tema.Elevado
 				if btn.Hovered() {
-					borda = e.cor()
+					fundo = misturarCor(tema.Elevado, e.cor(), 0.14)
 				}
+				superficie(gtx, size, fundo, transparente, icoRaio)
+				pointer.CursorPointer.Add(gtx.Ops)
 			}
-			superficie(gtx, size, fundo, borda, icoRaio)
 			layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return icone(gtx, e.ic, cor, 19)
+				return icone(gtx, e.ic, cor, 17)
 			})
 			return layout.Dimensions{Size: size}
 		}
 
-		filhos = append(filhos,
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				if !ligado {
-					return conteudo(gtx)
-				}
-				return btn.Layout(gtx, conteudo)
-			}),
-			layout.Rigid(layout.Spacer{Width: 6}.Layout),
-		)
+		if i > 0 {
+			filhos = append(filhos, layout.Rigid(layout.Spacer{Width: 3}.Layout))
+		}
+		filhos = append(filhos, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			if !ligado {
+				return conteudo(gtx)
+			}
+			return btn.Layout(gtx, conteudo)
+		}))
 	}
-	return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, filhos[:len(filhos)-1]...)
+	return layout.Background{}.Layout(gtx,
+		func(gtx layout.Context) layout.Dimensions {
+			superficie(gtx, gtx.Constraints.Min, tema.Afundado, transparente, trilhoRaio)
+			return layout.Dimensions{Size: gtx.Constraints.Min}
+		},
+		func(gtx layout.Context) layout.Dimensions {
+			return layout.UniformInset(3).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, filhos...)
+			})
+		},
+	)
 }
 
 // ---------------------------------------------------------------- apoio
@@ -1075,17 +1376,17 @@ func (d *dashTab) barraSelecao(gtx layout.Context) layout.Dimensions {
 		d.aoExcluirMassa(d.listaSelecionada())
 	}
 
-	return layout.Inset{Top: 2, Bottom: 6, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return layout.Inset{Top: 0, Bottom: 12, Left: margemPainel, Right: margemPainel}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Background{}.Layout(gtx,
 			func(gtx layout.Context) layout.Dimensions {
-				superficie(gtx, gtx.Constraints.Min, tema.AzulFraco, tema.Azul, 8)
+				superficie(gtx, gtx.Constraints.Min, tema.AzulFraco, tema.Azul, 12)
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			},
 			func(gtx layout.Context) layout.Dimensions {
 				gtx.Constraints.Min.X = gtx.Constraints.Max.X
 				return layout.Inset{Top: 6, Bottom: 6, Left: 10, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-						layout.Rigid(negrito(txt(d.th, fonteMono, spSecundario,
+						layout.Rigid(negrito(txt(d.th, fonteSans, spRotulo,
 							fmt.Sprintf("%d máquina(s) selecionada(s)", len(d.selecao)), tema.Texto)).Layout),
 						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 							return layout.Dimensions{Size: gtx.Constraints.Min}
@@ -1130,17 +1431,18 @@ func (d *dashTab) caixaSelecao(gtx layout.Context, cx conexoes.Conexao) layout.D
 	}
 	marcada := d.selecionada(cx)
 	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		lado := gtx.Dp(15)
+		lado := gtx.Dp(16)
 		gtx.Constraints.Min = image.Pt(lado, lado)
 		gtx.Constraints.Max = image.Pt(lado, lado)
-		fundo, borda := transparente, tema.LuzB
+		pointer.CursorPointer.Add(gtx.Ops)
+		fundo, borda := tema.Elevado, tema.Borda2
 		if btn.Hovered() {
-			borda = tema.Borda2
+			borda = comAlfa(tema.AzulCheio, 0.6)
 		}
 		if marcada {
 			fundo, borda = tema.AzulCheio, tema.AzulCheio
 		}
-		superficie(gtx, image.Pt(lado, lado), fundo, borda, 4)
+		superficie(gtx, image.Pt(lado, lado), fundo, borda, 5)
 		if marcada {
 			layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return icone(gtx, icons.NavigationCheck, hex(0xffffff), 11)
@@ -1199,17 +1501,18 @@ func (d *dashTab) caixaGrupo(gtx layout.Context, g *conexoes.Grupo) layout.Dimen
 		marcadas, total = d.contarSelecao(g)
 	}
 	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		lado := gtx.Dp(15)
+		lado := gtx.Dp(16)
 		gtx.Constraints.Min = image.Pt(lado, lado)
 		gtx.Constraints.Max = image.Pt(lado, lado)
-		fundo, borda := transparente, tema.LuzB
+		pointer.CursorPointer.Add(gtx.Ops)
+		fundo, borda := tema.Elevado, tema.Borda2
 		if btn.Hovered() {
-			borda = tema.Borda2
+			borda = comAlfa(tema.AzulCheio, 0.6)
 		}
 		if marcadas > 0 {
 			fundo, borda = tema.AzulCheio, tema.AzulCheio
 		}
-		superficie(gtx, image.Pt(lado, lado), fundo, borda, 4)
+		superficie(gtx, image.Pt(lado, lado), fundo, borda, 5)
 		switch {
 		case marcadas == total && marcadas > 0:
 			layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {

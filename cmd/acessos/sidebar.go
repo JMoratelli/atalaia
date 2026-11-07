@@ -9,10 +9,12 @@ import (
 	"acessos-go/internal/conexoes"
 
 	"gio.tools/icons"
+	"gioui.org/font"
 	"gioui.org/io/event"
 	"gioui.org/io/key"
 	"gioui.org/io/pointer"
 	"gioui.org/layout"
+	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/unit"
@@ -21,15 +23,12 @@ import (
 )
 
 const (
-	lateralLarga = unit.Dp(212)
-	// UMA calha só pra toda a coluna: marca, busca, itens e o botão de
-	// recolher começam na mesma vertical, e os ícones (lupa, item, chevron)
-	// caem todos na coluna padColuna+padItem. Antes cada elemento tinha o
-	// próprio recuo (12, 8, 5+10) e nada batia com nada.
-	padColuna       = unit.Dp(10)
-	padItem         = unit.Dp(10)
-	lateralTrilho   = unit.Dp(60) // recolhida vira TRILHO de ícones, nunca some
-	itemLateralRaio = unit.Dp(7)
+	lateralLarga = unit.Dp(196)
+	// lateralLarga é também a coluna da marca no topo (topbar.go): as abas
+	// começam na borda dela, abra ou feche a lateral. UMA calha só pra toda
+	// a coluna: busca, itens, árvore e o pé começam na mesma vertical.
+	padColuna     = unit.Dp(12)
+	lateralTrilho = unit.Dp(60) // recolhida vira TRILHO de ícones, nunca some
 )
 
 // itemLateral é uma entrada do menu. sid identifica a seção; o clique abre
@@ -81,6 +80,10 @@ type sidebar struct {
 	sobCursor   *conexoes.Conexao
 	grupoSob    *conexoes.Grupo
 	aoMenuHost  func(cx conexoes.Conexao, pos image.Point)
+	// abaColada: a aba ativa do topo começa na borda direita desta lateral
+	// e desce reta (ver formaAbaAtiva) — aí a borda da folha sobe reta até
+	// ela, sem o canto arredondado.
+	abaColada   bool
 	aoMenuGrupo func(g *conexoes.Grupo, pos image.Point)
 }
 
@@ -150,6 +153,12 @@ func (s *sidebar) largura(gtx layout.Context) int {
 }
 
 // layout desenha a lateral. aoAbrir recebe o sid do item clicado.
+//
+// Desde a 2.9 a lateral não tem fundo próprio: ela é a MOLDURA (pintada na
+// janela inteira), do mesmo tom do topo, e a folha começa logo à direita
+// dela, com o canto de cima arredondado. O item ativo corre até essa borda
+// e se funde à folha, como o menu da central do ChamadoJá. A marca do app
+// subiu para o topo, que alinha a coluna dela com a desta lateral.
 func (s *sidebar) layout(gtx layout.Context, th *material.Theme, ativo string,
 	aoAbrir func(sid string), busca layout.Widget) layout.Dimensions {
 
@@ -159,10 +168,6 @@ func (s *sidebar) layout(gtx layout.Context, th *material.Theme, ativo string,
 	for _, it := range s.itens {
 		if it.btn.Clicked(gtx) {
 			aoAbrir(it.sid)
-			// Sem isto, o botão continua com o foco de teclado do Gio: um
-			// Enter/Espaço digitado depois (num comando dentro de uma
-			// sessão SSH/VNC, por exemplo) é lido como um novo clique
-			// nele, reabrindo a aba por baixo dos panos.
 			gtx.Execute(key.FocusCmd{Tag: nil})
 		}
 	}
@@ -177,118 +182,121 @@ func (s *sidebar) layout(gtx layout.Context, th *material.Theme, ativo string,
 	w := s.largura(gtx)
 	gtx.Constraints.Min.X = w
 	gtx.Constraints.Max.X = w
-	alt := gtx.Constraints.Max.Y
-
-	// translúcida sobre o gradiente da janela (.barra do tema.py), não o
-	// cromo opaco: é o que dá o vidro.
-	faixaFosca(gtx, th, image.Pt(w, alt))
-	// fio de separação à direita, como a borda do cromo no original
-	paint.FillShape(gtx.Ops, tema.Borda2,
-		clip.Rect{Min: image.Pt(w-1, 0), Max: image.Pt(w, alt)}.Op())
+	// A borda da folha corre na última coluna desta lateral, POR BAIXO dos
+	// itens: o item ativo a cobre e se abre para a folha.
+	raio := gtx.Dp(folhaRaio)
+	if s.abaColada {
+		raio = 0
+	}
+	contornoFolhaLateral(gtx, w, gtx.Constraints.Max.Y, raio)
 
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return s.marca(gtx, th) }),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			// A busca dos hosts mora AQUI quando há largura pra ela; no
-			// modo trilho ela volta pro painel (ver dashtab), pra nunca
-			// ficar sem forma de procurar.
 			if s.recolhida() || busca == nil {
-				return layout.Dimensions{}
+				return layout.Spacer{Height: 12}.Layout(gtx)
 			}
-			return layout.Inset{Top: 6, Bottom: 2, Left: padColuna, Right: padColuna}.Layout(gtx, busca)
+			return layout.Inset{Top: 12, Left: padColuna, Right: padColuna}.Layout(gtx, busca)
 		}),
-		layout.Rigid(layout.Spacer{Height: 6}.Layout),
+		layout.Rigid(layout.Spacer{Height: 14}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			var filhos []layout.FlexChild
 			for _, it := range s.itens {
 				it := it
 				filhos = append(filhos, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return it.btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return s.item(gtx, th, it, it.sid == ativo, it.btn.Hovered())
-					})
+					return s.item(gtx, th, it, it.sid == ativo)
 				}))
 			}
 			return layout.Flex{Axis: layout.Vertical}.Layout(gtx, filhos...)
 		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if s.recolhida() || s.painel == nil {
+				return layout.Dimensions{}
+			}
+			return layout.Inset{Top: 20, Bottom: 6, Left: padColuna + 2}.Layout(gtx,
+				txt(th, fonteMono, unit.Sp(10.5), "MÁQUINAS", tema.TopoSec).Layout)
+		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			return s.arvore(gtx, th)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			// o pé da lateral (protocolo do clique e recolher), separado
+			// da árvore por um fio da moldura
+			return layout.Inset{Left: padColuna, Right: padColuna}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				paint.FillShape(gtx.Ops, tema.MolduraLinha, clip.Rect{Max: image.Pt(gtx.Constraints.Max.X, 1)}.Op())
+				return layout.Dimensions{Size: image.Pt(gtx.Constraints.Max.X, 1)}
+			})
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return s.tiraProtocolo(gtx, th) }),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return s.botaoRecolher(gtx, th) }),
 	)
 }
 
-// marca: eyebrow + nome do app, escondidos no modo trilho (só o ícone
-// sobrevive ali — não há largura para texto).
-func (s *sidebar) marca(gtx layout.Context, th *material.Theme) layout.Dimensions {
+// item é uma entrada de navegação da lateral (hoje só "Painel"). O ativo
+// é pintado com a folha e vai até a borda direita, onde se funde a ela
+// (formaItemAtivo); o fundo fica fora do Clickable, que recortaria as
+// curvas.
+func (s *sidebar) item(gtx layout.Context, th *material.Theme, it *itemLateral, ativo bool) layout.Dimensions {
+	esq := padColuna
 	if s.recolhida() {
-		return layout.Inset{Top: 10, Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return icone(gtx, icons.ActionHome, tema.TopoTxt, 20)
-			})
-		})
+		esq = 8
 	}
-	return layout.Inset{Top: 10, Bottom: 4, Left: padColuna + padItem, Right: padColuna}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(txt(th, fonteMono, spMarcaSub, "MACHADÃO CORP", tema.TopoSec).Layout),
-			layout.Rigid(negrito(txt(th, fonteCond, spMarcaTopo, "Acessos", tema.TopoTxt)).Layout),
-		)
-	})
-}
-
-// item: ícone sempre visível; rótulo some no modo trilho. O trilho de
-// seleção (3px) existe SEMPRE, transparente quando inativo — se ele
-// aparecesse só no item ativo, o texto deslocaria a cada clique.
-func (s *sidebar) item(gtx layout.Context, th *material.Theme, it *itemLateral, ativo, hover bool) layout.Dimensions {
-	fundo := transparente
-	cor := tema.TopoSec
-	switch {
-	case ativo:
-		fundo, cor = tema.VidroH, tema.TopoTxt
-	case hover:
-		fundo, cor = tema.Vidro, tema.TopoTxt
-	}
-	trilho := transparente
-	if ativo {
-		trilho = tema.Azul
-	}
-
-	return layout.Inset{Top: 1, Bottom: 1, Left: padColuna, Right: padColuna}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Stack{}.Layout(gtx,
-			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				size := gtx.Constraints.Min
-				superficie(gtx, size, fundo, transparente, itemLateralRaio)
-				lw := gtx.Dp(3)
-				rr := clip.UniformRRect(image.Rect(0, 0, lw, size.Y), gtx.Dp(2))
-				paint.FillShape(gtx.Ops, trilho, rr.Op(gtx.Ops))
-				return layout.Dimensions{Size: size}
-			}),
-			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				if s.recolhida() {
-					return layout.Inset{Top: 7, Bottom: 7}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return icone(gtx, it.ic, cor, 18)
-						})
+	return layout.Inset{Left: esq}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min.X = gtx.Constraints.Max.X
+		conteudo := op.Record(gtx.Ops)
+		d := it.btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			pointer.CursorPointer.Add(gtx.Ops)
+			alt := gtx.Dp(40)
+			gtx.Constraints.Min.Y, gtx.Constraints.Max.Y = alt, alt
+			corIc, cor := tema.TopoSec, tema.TopoSec
+			f := fonteSansMedia
+			switch {
+			case ativo:
+				corIc, cor = tema.Azul, tema.Texto
+				f = fonteSans
+				f.Weight = font.SemiBold
+			case it.btn.Hovered():
+				corIc, cor = tema.TopoTxt, tema.TopoTxt
+			}
+			if s.recolhida() {
+				return centroV(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Left: 13}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return icone(gtx, it.ic, corIc, 20)
 					})
-				}
-				gtx.Constraints.Min.X = gtx.Constraints.Max.X
-				return layout.Inset{Top: 7, Bottom: 7, Left: padItem, Right: padItem}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				})
+			}
+			return centroV(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Left: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return icone(gtx, it.ic, cor, 18)
+							return icone(gtx, it.ic, corIc, 19)
 						}),
 						layout.Rigid(layout.Spacer{Width: 10}.Layout),
-						layout.Rigid(txt(th, fonteSans, spCorpo, it.rotulo, cor).Layout),
+						layout.Rigid(txt(th, f, unit.Sp(14), it.rotulo, cor).Layout),
 					)
 				})
-			}),
-		)
+			})
+		})
+		desenho := conteudo.Stop()
+		switch {
+		case ativo:
+			forma := clip.Outline{Path: formaItemAtivo(gtx, d.Size)}.Op().Push(gtx.Ops)
+			pintarFolha(gtx)
+			forma.Pop()
+			paint.FillShape(gtx.Ops, tema.Contorno,
+				clip.Stroke{Path: contornoItemAtivo(gtx, d.Size), Width: 1}.Op())
+		case it.btn.Hovered():
+			r := gtx.Dp(12)
+			rr := clip.RRect{Rect: image.Rectangle{Max: image.Pt(d.Size.X-gtx.Dp(padColuna), d.Size.Y)}, NW: r, SW: r, NE: r, SE: r}
+			paint.FillShape(gtx.Ops, tinta(tema.TopoTxt, 0.06), rr.Op(gtx.Ops))
+		}
+		desenho.Add(gtx.Ops)
+		return d
 	})
 }
 
 func (s *sidebar) botaoRecolher(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	ic := icons.NavigationChevronLeft
-	rot := "Recolher  F12"
+	rot := "Recolher a lateral   F12"
 	if s.recolhida() {
 		ic = icons.NavigationChevronRight
 		rot = ""
@@ -300,32 +308,31 @@ func (s *sidebar) botaoRecolher(gtx layout.Context, th *material.Theme) layout.D
 
 	return layout.Inset{Top: 4, Bottom: 8, Left: padColuna, Right: padColuna}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return s.collapseBtn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			pointer.CursorPointer.Add(gtx.Ops)
 			return layout.Stack{}.Layout(gtx,
 				layout.Expanded(func(gtx layout.Context) layout.Dimensions {
 					size := gtx.Constraints.Min
-					fundo := transparente
 					if s.collapseBtn.Hovered() {
-						fundo = tema.Vidro
+						superficie(gtx, size, tinta(tema.TopoTxt, 0.06), transparente, 9)
 					}
-					superficie(gtx, size, fundo, transparente, itemLateralRaio)
 					return layout.Dimensions{Size: size}
 				}),
 				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 					if s.recolhida() {
-						return layout.Inset{Top: 6, Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Top: 7, Bottom: 7}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 								return icone(gtx, ic, cor, 18)
 							})
 						})
 					}
 					gtx.Constraints.Min.X = gtx.Constraints.Max.X
-					return layout.Inset{Top: 6, Bottom: 6, Left: padItem, Right: padItem}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Top: 7, Bottom: 7, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								return icone(gtx, ic, cor, 18)
 							}),
-							layout.Rigid(layout.Spacer{Width: 10}.Layout),
-							layout.Rigid(txt(th, fonteMono, spBtnTopo, rot, cor).Layout),
+							layout.Rigid(layout.Spacer{Width: 8}.Layout),
+							layout.Rigid(txt(th, fonteSansMedia, unit.Sp(12.5), rot, cor).Layout),
 						)
 					})
 				}),
@@ -334,7 +341,6 @@ func (s *sidebar) botaoRecolher(gtx layout.Context, th *material.Theme) layout.D
 	})
 }
 
-// garante que color continua importado mesmo se o corpo mudar
 var _ color.NRGBA
 
 // ------------------------------------------------ lista de máquinas
@@ -402,164 +408,175 @@ func (s *sidebar) ramo(gtx layout.Context, th *material.Theme, g *conexoes.Grupo
 
 func (s *sidebar) linhaGrupo(gtx layout.Context, th *material.Theme, g *conexoes.Grupo, nivel int, aberto, hover bool) layout.Dimensions {
 	seta := setaExpansor(aberto)
-	cor := tema.TopoSec
+	cor := tema.TopoTxt
+	f := fonteSans
+	f.Weight = font.SemiBold
+	if nivel > 0 {
+		cor = tema.TopoSec
+		if aberto {
+			cor = tema.TopoTxt
+		}
+	}
 	if hover {
 		cor = tema.TopoTxt
 	}
-	return layout.Stack{}.Layout(gtx,
-		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-			if hover {
-				superficie(gtx, gtx.Constraints.Min, tema.Vidro1, transparente, 5)
-			}
-			return layout.Dimensions{Size: gtx.Constraints.Min}
-		}),
-		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.X = gtx.Constraints.Max.X
-			return layout.Inset{
-				Top: 3, Bottom: 3, Right: padColuna,
-				Left: padColuna + unit.Dp(float32(nivel))*linhaLateralAlt,
-			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return icone(gtx, seta, cor, 14)
-					}),
-					layout.Rigid(layout.Spacer{Width: 4}.Layout),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						w, h := gtx.Dp(3), gtx.Dp(13)
-						rr := clip.UniformRRect(image.Rectangle{Max: image.Pt(w, h)}, gtx.Dp(2))
-						paint.FillShape(gtx.Ops, corCategoria(g.Caminho[0]), rr.Op(gtx.Ops))
-						return layout.Dimensions{Size: image.Pt(w, h)}
-					}),
-					layout.Rigid(layout.Spacer{Width: 6}.Layout),
-					layout.Flexed(1, rotulo(th, fonteSans, spCorpo, g.Nome, cor)),
-					layout.Rigid(layout.Spacer{Width: 4}.Layout),
-					layout.Rigid(rotulo(th, fonteMono, spGrupoCont, fmt.Sprint(g.Total()), tema.Fraco)),
-				)
-			})
-		}),
-	)
-}
-
-// linhaHost: clicar abre a conexão no protocolo escolhido na tira de
-// baixo. Se a máquina não tiver aquele protocolo, cai no primeiro que ela
-// tiver — melhor abrir o que dá do que não responder ao clique.
-func (s *sidebar) linhaHost(gtx layout.Context, th *material.Theme, cx conexoes.Conexao, nivel int) layout.Dimensions {
-	btn := s.clique("h:" + cx.GrupoStr() + "|" + cx.Nome)
-	if btn.Clicked(gtx) && s.painel != nil {
-		p := s.proto
-		if !cx.Tem(p) {
-			p = conexoes.Protocolo("")
-			for _, e := range protocolos {
-				if cx.Tem(e.p) {
-					p = e.p
-					break
-				}
-			}
-		}
-		if p != "" {
-			s.painel.abrir(cx, p)
-		}
-	}
-	if btn.Hovered() {
-		cx := cx
-		s.sobCursor = &cx
-		// Mesma dica do Painel: a lateral também lista a máquina pelo
-		// NOME, e é onde ela é mais estreita — o nome fica truncado com
-		// mais frequência aqui do que lá.
-		pedirDica("lateral:"+cx.GrupoStr()+"|"+cx.Nome, cx.Descricao)
-	}
-	e := estiloDe(s.proto)
-	corIco := e.cor()
-	if !cx.Tem(s.proto) {
-		corIco = tema.Fraco
-	}
-	cor := tema.TopoSec
-	if btn.Hovered() {
-		cor = tema.TopoTxt
-	}
-
-	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return layout.Inset{Left: padColuna, Right: padColuna}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Stack{}.Layout(gtx,
 			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				if btn.Hovered() {
-					superficie(gtx, gtx.Constraints.Min, tema.Vidro, transparente, 5)
+				if hover {
+					superficie(gtx, gtx.Constraints.Min, tinta(tema.TopoTxt, 0.06), transparente, 9)
 				}
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			}),
 			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 				gtx.Constraints.Min.X = gtx.Constraints.Max.X
+				alt := gtx.Dp(30)
+				gtx.Constraints.Min.Y = alt
 				return layout.Inset{
-					Top: 2, Bottom: 2, Right: padColuna,
-					Left: padColuna + unit.Dp(float32(nivel))*linhaLateralAlt + 18,
+					Right: 6,
+					Left:  unit.Dp(6) + unit.Dp(float32(nivel))*linhaLateralAlt,
 				}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return icone(gtx, e.ic, corIco, 13)
-						}),
-						layout.Rigid(layout.Spacer{Width: 6}.Layout),
-						layout.Flexed(1, rotulo(th, fonteSans, spCorpo, cx.Nome, cor)),
-					)
+					return centroV(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return icone(gtx, seta, cor, 15)
+							}),
+							layout.Rigid(layout.Spacer{Width: 6}.Layout),
+							layout.Flexed(1, rotulo(th, f, unit.Sp(13), g.Nome, cor)),
+							layout.Rigid(layout.Spacer{Width: 6}.Layout),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return contador(gtx, th, fmt.Sprint(g.Total()))
+							}),
+						)
+					})
 				})
 			}),
 		)
 	})
 }
 
-// tiraProtocolo escolhe COM QUE protocolo o clique na lista abre — é o
-// mesmo controle do rodapé da lista no app original (Tela/Shell/RDP).
-// Slots sempre presentes; só a cor muda entre escolhido e não escolhido.
+// linhaHost é a máquina na árvore da lateral: o ponto de vida (o mesmo do
+// card), o nome e, à direita, o protocolo que o clique vai abrir — na cor
+// dele quando a máquina tem o escolhido na tira de baixo, apagado quando o
+// clique vai cair no primeiro que ela tiver.
+func (s *sidebar) linhaHost(gtx layout.Context, th *material.Theme, cx conexoes.Conexao, nivel int) layout.Dimensions {
+	btn := s.clique("h:" + cx.GrupoStr() + "|" + cx.Nome)
+	p := s.proto
+	if !cx.Tem(p) {
+		p = conexoes.Protocolo("")
+		for _, e := range protocolos {
+			if cx.Tem(e.p) {
+				p = e.p
+				break
+			}
+		}
+	}
+	if btn.Clicked(gtx) && s.painel != nil && p != "" {
+		s.painel.abrir(cx, p)
+	}
+	if btn.Hovered() {
+		cx := cx
+		s.sobCursor = &cx
+		pedirDica("lateral:"+cx.GrupoStr()+"|"+cx.Nome, cx.Descricao)
+	}
+	var rot string
+	corTag := tema.TopoSec
+	if p != "" {
+		e := estiloDe(p)
+		rot = e.rotulo
+		if p == s.proto {
+			corTag = e.cor()
+		}
+	}
+	cor := tema.TopoSec
+	if btn.Hovered() {
+		cor = tema.TopoTxt
+	}
+	var corVida color.NRGBA
+	mostraVida := false
+	if s.painel != nil {
+		corVida, mostraVida = corDaVida(s.painel.vidaConhecida(cx))
+	}
+
+	return layout.Inset{Left: padColuna, Right: padColuna}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			pointer.CursorPointer.Add(gtx.Ops)
+			return layout.Stack{}.Layout(gtx,
+				layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+					if btn.Hovered() {
+						superficie(gtx, gtx.Constraints.Min, tinta(tema.TopoTxt, 0.06), transparente, 9)
+					}
+					return layout.Dimensions{Size: gtx.Constraints.Min}
+				}),
+				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+					gtx.Constraints.Min.X = gtx.Constraints.Max.X
+					gtx.Constraints.Min.Y = gtx.Dp(28)
+					return layout.Inset{
+						Right: 8,
+						Left:  unit.Dp(10) + unit.Dp(float32(nivel))*linhaLateralAlt,
+					}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return centroV(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return pontoVida(gtx, corVida, mostraVida)
+								}),
+								layout.Rigid(layout.Spacer{Width: 8}.Layout),
+								layout.Flexed(1, rotulo(th, fonteSans, unit.Sp(13), cx.Nome, cor)),
+								layout.Rigid(layout.Spacer{Width: 6}.Layout),
+								layout.Rigid(rotulo(th, fonteMono, unit.Sp(10.5), rot, corTag)),
+							)
+						})
+					})
+				}),
+			)
+		})
+	})
+}
+
+// tiraProtocolo escolhe o que o clique numa máquina da lateral abre. É um
+// trilho (moldura.go) com o ícone de cada protocolo; o escolhido fica em
+// relevo, na cor dele.
 func (s *sidebar) tiraProtocolo(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	if s.recolhida() || s.painel == nil {
 		return layout.Dimensions{}
 	}
-	var filhos []layout.FlexChild
+	escolhido := 0
+	btns := make([]*widget.Clickable, len(protocolos))
 	for i, e := range protocolos {
-		i, e := i, e
+		btns[i] = &s.btnProto[i]
 		if s.btnProto[i].Clicked(gtx) {
 			s.proto = e.p
 		}
-		escolhido := s.proto == e.p
-		filhos = append(filhos,
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				return s.btnProto[i].Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Stack{}.Layout(gtx,
-						layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-							size := gtx.Constraints.Min
-							fundo, borda := tema.Vidro, tema.LuzB
-							if escolhido {
-								fundo, borda = e.fundo(), transparente
-							} else if s.btnProto[i].Hovered() {
-								fundo = tema.VidroH
-							}
-							superficie(gtx, size, fundo, borda, itemLateralRaio)
-							return layout.Dimensions{Size: size}
-						}),
-						layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-							cor := tema.TopoSec
-							if escolhido {
-								cor = e.cor()
-							}
-							gtx.Constraints.Min.X = gtx.Constraints.Max.X
-							return layout.Inset{Top: 4, Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								// Só o rótulo: com quatro fatias em 212dp, ícone
-								// + texto não cabia e o texto saía cortado
-								// ("she…", "arq…"). O ícone do protocolo já
-								// está na linha de cada máquina, logo acima.
-								return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									return txt(th, fonteMono, spBtnTopo, e.rotulo, cor).Layout(gtx)
-								})
-							})
-						}),
-					)
+		if s.proto == e.p {
+			escolhido = i
+		}
+	}
+	return layout.Inset{Top: 10, Bottom: 2, Left: padColuna, Right: padColuna}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Left: 2, Bottom: 6}.Layout(gtx,
+					txt(th, fonteSansMedia, unit.Sp(11.5), "Clique na máquina abre em", tema.TopoSec).Layout)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				// os quatro segmentos dividem a largura toda
+				larg := (gtx.Constraints.Max.X - gtx.Dp(6) - 3*gtx.Dp(3)) / len(protocolos)
+				return trilho(gtx, len(protocolos), escolhido, btns, func(gtx layout.Context, i int, ativo, hover bool) layout.Dimensions {
+					e := protocolos[i]
+					size := image.Pt(larg, gtx.Dp(28))
+					gtx.Constraints.Min, gtx.Constraints.Max = size, size
+					cor := tema.TopoSec
+					if ativo {
+						cor = e.cor()
+					} else if hover {
+						cor = tema.TopoTxt
+					}
+					return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return icone(gtx, e.ic, cor, 17)
+					})
 				})
 			}),
-			layout.Rigid(layout.Spacer{Width: 3}.Layout),
 		)
-	}
-	return layout.Inset{Top: 4, Bottom: 2, Left: padColuna, Right: padColuna}.Layout(gtx,
-		func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, filhos[:len(filhos)-1]...)
-		})
+	})
 }
 
 // rastrear registra a área por cima da lateral (PassOp) para saber onde

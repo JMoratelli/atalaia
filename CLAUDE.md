@@ -223,10 +223,15 @@
   sombra dos cards nunca tinha aparecido por isso) e é `sombraVazada` em
   superfície translúcida. Azul como FUNDO de conteúdo branco (botão
   primário, caixinha marcada) é `AzulCheio`, não `Azul` — no escuro o
-  `Azul` é claro demais para isso. `faixaFosca` (lateral, rodapé, barra
-  da sessão) só usa o fundo fosco na janela principal, reconhecida pelo
-  Theme (`temaApp`): a barra da sessão também é desenhada na janela
-  destacada, que não tem fundo fosco e roda em outra goroutine.
+  `Azul` é claro demais para isso. Desde a 2.9 a janela é
+  MOLDURA e FOLHA (`moldura.go`): topo, lateral e barra de status são a
+  moldura (`tema.Moldura`), o conteúdo mora na folha (`fundoFolha`, a
+  imagem fosca ancorada na janela), e a aba ativa e o item ativo da lateral
+  são pintados com a folha e contornados (`tema.Contorno`). A imagem da
+  folha (`fosco`) e os caches da malha são só da janela principal — a
+  janela destacada da sessão pinta `tema.Pagina` liso e roda em outra
+  goroutine. Texto apagado sobre a moldura é `TopoSec`, nunca `Fraco`
+  (fica abaixo de 3:1 no claro).
 
 - Uma vez por mês (não a cada sessão — era diário antes e virou ruído),
   checar se há versão nova das bibliotecas externas usadas no projeto:

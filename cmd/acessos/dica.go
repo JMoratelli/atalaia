@@ -128,14 +128,14 @@ func layoutDica(gtx layout.Context, th *material.Theme) layout.Dimensions {
 func dicaCorpo(gtx layout.Context, th *material.Theme, texto string) layout.Dimensions {
 	return layout.Background{}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
-			sombra(gtx, gtx.Constraints.Min, 7)
+			sombra(gtx, gtx.Constraints.Min, 10)
 			// Opaco: a dica flutua sobre os cards de vidro do Painel, e
 			// texto sobre texto não se lê.
-			superficieCartao(gtx, gtx.Constraints.Min, 7)
+			superficieCartao(gtx, gtx.Constraints.Min, 10)
 			return layout.Dimensions{Size: gtx.Constraints.Min}
 		},
 		func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: 7, Bottom: 8, Left: 10, Right: 10}.Layout(gtx,
+			return layout.Inset{Top: 8, Bottom: 9, Left: 12, Right: 12}.Layout(gtx,
 				rotulo(th, fonteSans, spSecundario, texto, tema.Texto))
 		},
 	)

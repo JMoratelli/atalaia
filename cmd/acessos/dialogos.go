@@ -47,7 +47,7 @@ func (d *dlgConflito) Corpo(gtx layout.Context, th *material.Theme) layout.Dimen
 	}
 
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(rotulo(th, fonteMono, spSecundario,
+		layout.Rigid(rotulo(th, fonteSans, spRotulo,
 			fmt.Sprintf("%d arquivo(s) já existem no destino:", len(d.nomes)), tema.Sec)),
 		espaco(8),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -179,10 +179,10 @@ func (d *dlgTexto) Corpo(gtx layout.Context, th *material.Theme) layout.Dimensio
 	}
 	if d.erro != "" {
 		filhos = append(filhos, espaco(6),
-			layout.Rigid(rotulo(th, fonteMono, spSecundario, d.erro, tema.ErroFg)))
+			layout.Rigid(rotulo(th, fonteSans, spRotulo, d.erro, tema.ErroFg)))
 	}
 	filhos = append(filhos, espaco(6),
-		layout.Rigid(rotulo(th, fonteMono, spCardMeta, "Enter confirma · Esc cancela", tema.Fraco)),
+		layout.Rigid(rotulo(th, fonteSans, spNota, "Enter confirma · Esc cancela", tema.Fraco)),
 		espaco(12),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,

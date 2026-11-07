@@ -111,11 +111,11 @@ func layoutModal(gtx layout.Context, th *material.Theme) layout.Dimensions {
 		gtx.Constraints.Min.Y = 0
 
 		macro := op.Record(gtx.Ops)
-		dims := layout.Inset{Top: 14, Bottom: 14, Left: 16, Right: 16}.Layout(gtx,
+		dims := layout.Inset{Top: 20, Bottom: 20, Left: 22, Right: 22}.Layout(gtx,
 			func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-					layout.Rigid(negrito(txt(th, fonteCond, spSubgrupo, d.Titulo(), tema.Texto)).Layout),
-					layout.Rigid(layout.Spacer{Height: 10}.Layout),
+					layout.Rigid(negrito(txt(th, fonteTitulo, unit.Sp(17), d.Titulo(), tema.Texto)).Layout),
+					layout.Rigid(layout.Spacer{Height: 14}.Layout),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return d.Corpo(gtx, th)
 					}),
@@ -124,8 +124,8 @@ func layoutModal(gtx layout.Context, th *material.Theme) layout.Dimensions {
 		conteudo := macro.Stop()
 
 		// peso vem da SOMBRA, não de vidro: o cartão é opaco.
-		sombraElev(gtx, dims.Size, 12, &elevDialogo)
-		superficieCartao(gtx, dims.Size, 12)
+		sombraElev(gtx, dims.Size, 16, &elevDialogo)
+		superficieCartao(gtx, dims.Size, 16)
 		conteudo.Add(gtx.Ops)
 		return dims
 	})
@@ -137,14 +137,15 @@ func campoSenha(gtx layout.Context, th *material.Theme, ed *widget.Editor, dica 
 	ed.SingleLine = true
 	ed.Submit = true
 	ed.Mask = '•'
+	focado := gtx.Focused(ed)
 	return layout.Background{}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
-			superficie(gtx, gtx.Constraints.Min, tema.Campo, tema.Borda2, 8)
+			fundoCampo(gtx, gtx.Constraints.Min, focado)
 			return layout.Dimensions{Size: gtx.Constraints.Min}
 		},
 		func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints.Min.X = gtx.Constraints.Max.X
-			return layout.Inset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Top: 9, Bottom: 9, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				e := material.Editor(th, ed, dica)
 				e.Font = fonteMono
 				e.TextSize = spCorpo

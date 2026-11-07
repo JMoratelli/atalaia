@@ -196,8 +196,7 @@ func (t *vncTab) Selo() (*widget.Icon, color.NRGBA, color.NRGBA) {
 // EhTelaRemota marca esta aba como tela remota (ver tab.go).
 func (t *vncTab) EhTelaRemota() {}
 
-func (t *vncTab) Pinned() bool  { return false }
-func (t *vncTab) SoIcone() bool { return false }
+func (t *vncTab) Pinned() bool { return false }
 
 func (t *vncTab) Close() {
 	t.closeOnce.Do(func() { close(t.stop) })
@@ -384,7 +383,7 @@ func (t *vncTab) Layout(gtx layout.Context) layout.Dimensions {
 	// tema claro parecia bug, não vídeo.
 	fundo := color.NRGBA{A: 255}
 	if tela == nil {
-		fundo = tema.Fundo
+		fundo = tema.Pagina
 	}
 	paint.ColorOp{Color: fundo}.Add(gtx.Ops)
 	paint.PaintOp{}.Add(gtx.Ops)

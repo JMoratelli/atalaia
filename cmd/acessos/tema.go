@@ -12,7 +12,6 @@ import (
 	"gioui.org/f32"
 	"gioui.org/font"
 	"gioui.org/layout"
-	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/unit"
@@ -78,9 +77,30 @@ type Tema struct {
 	RoxoFraco             color.NRGBA
 	Hero1, Hero2, HeroTxt color.NRGBA
 	HeroSec               color.NRGBA
-	// Escuro diz qual paleta é esta — fundoCanto usa pra saber que o
-	// Gio compõe overlay translúcido mais forte sobre fundo escuro
-	// (espaço linear, não sRGB) e precisa de alfa bem mais baixo ali.
+	// Repaginação da 2.9 (a "moldura e folha" da central do ChamadoJá):
+	// Moldura é o tom do topo, da lateral e da barra de status; Pagina é a
+	// FOLHA onde o conteúdo mora. A aba ativa e o item ativo da lateral são
+	// pintados com a folha e se fundem a ela — é o que liga o cromo ao
+	// conteúdo. MolduraLinha é o fio entre a moldura e a folha.
+	Moldura, MolduraLinha, Pagina color.NRGBA
+	// Contorno é o traço que DESENHA a folha: corre na base do topo e na
+	// borda da lateral, e contorna a aba ativa e o item ativo da lateral
+	// (que interrompem a linha e se abrem para a folha) — o "recorte" do
+	// menu da central do ChamadoJá, que deixa óbvio qual está aberta.
+	Contorno color.NRGBA
+	// Brilho é a luz no canto superior direito da folha (ver fundoFolha);
+	// BrilhoVeu, o véu claro no meio dela (só no tema claro).
+	Brilho, BrilhoVeu color.NRGBA
+	// Elevado: o que fica EM RELEVO dentro de um trilho (segmento
+	// escolhido, protocolo configurado no card, botão sob o mouse);
+	// Afundado: o trilho em si.
+	Elevado, Afundado color.NRGBA
+	// CardTinta/CardTintaH: a tinta do card sobre a folha (fosca por
+	// baixo), em repouso e sob o mouse; CardBorda, a borda dele.
+	CardTinta, CardTintaH, CardBorda color.NRGBA
+	// Escuro diz qual paleta é esta: o Gio compõe overlay translúcido
+	// mais forte sobre fundo escuro (espaço linear, não sRGB) e quem pinta
+	// translucidez precisa de alfa bem mais baixo ali.
 	Escuro bool
 }
 
@@ -106,7 +126,9 @@ var temaClaro = Tema{
 	// o painel inteiro lia como blocos chapados sobre um fundo bonito.
 	Vidro1: rgba(0xffffff, 0.70), Vidro2: rgba(0xffffff, 0.78), Vidro3: rgba(0xffffff, 1.00),
 	VidroTinta: rgba(0xffffff, 0.52), VidroTintaH: rgba(0xffffff, 0.80),
-	BuscaVidro: rgba(0xf4f7fb, 0.82), BuscaFosco: rgba(0xf4f7fb, 0.62),
+	// Busca no tom da Moldura (2.9): a caixa do atalho é um pedaço do
+	// topo do app flutuando, e não mais um vidro cinza à parte.
+	BuscaVidro: rgba(0xd9e1ec, 0.90), BuscaFosco: rgba(0xd9e1ec, 0.70),
 	// Borda do card em repouso: era 11%, quase se perdia contra o fundo —
 	// ver o relato de bordas "dissolvendo" no tema claro.
 	LuzB:  rgba(0x11161a, 0.17),
@@ -158,7 +180,14 @@ var temaClaro = Tema{
 	// do tema claro (#5b6976) sobre um hero quase preto é o mesmo erro da
 	// "faixa preta acidental" que a skill descreve, só que invertido.
 	HeroSec: hex(0x9aa6b2),
-	Escuro:  false,
+	Moldura: hex(0xd9e1ec), MolduraLinha: hex(0xc3cdd9), Pagina: hex(0xedf1f6),
+	Contorno: hex(0x9faab8),
+	Brilho:   rgba(0x4263eb, 0.15), BrilhoVeu: rgba(0xffffff, 0.55),
+	Elevado: hex(0xffffff), Afundado: hex(0xdfe5ee),
+	// Mais opaco e com borda mais firme que na primeira versão da 2.9:
+	// no claro os cards liam "sem peso", quase da cor da folha.
+	CardTinta: rgba(0xffffff, 0.90), CardTintaH: rgba(0xffffff, 1.0), CardBorda: hex(0xc9d2dd),
+	Escuro: false,
 }
 
 var temaEscuro = Tema{
@@ -188,7 +217,7 @@ var temaEscuro = Tema{
 	// contraste do texto secundário em cima do card.
 	Vidro1: rgba(0xffffff, 0.045), Vidro2: rgba(0xffffff, 0.075), Vidro3: rgba(0xffffff, 0.13),
 	VidroTinta: rgba(0xffffff, 0.030), VidroTintaH: rgba(0xffffff, 0.075),
-	BuscaVidro: rgba(0x171b21, 0.72), BuscaFosco: rgba(0x171b21, 0.55),
+	BuscaVidro: rgba(0x0b0e13, 0.82), BuscaFosco: rgba(0x0b0e13, 0.62),
 	// A borda do card em repouso era branco puro translúcido — sobre fundo
 	// quase preto isso lê como BRILHO, não como borda de material. Um
 	// azul-acinzentado neutro em vez de branco resolve isso sem mudar o
@@ -222,7 +251,12 @@ var temaEscuro = Tema{
 	AzulFraco: rgba(0x748ffc, 0.16), VerdeFraco: rgba(0x38d9a9, 0.16), RoxoFraco: rgba(0xb197fc, 0.16),
 	Hero1: hex(0x0b0e12), Hero2: hex(0x1c2733), HeroTxt: hex(0xffffff),
 	HeroSec: hex(0x9aa6b2),
-	Escuro:  true,
+	Moldura: hex(0x0b0e13), MolduraLinha: hex(0x1d242d), Pagina: hex(0x151a21),
+	Contorno: hex(0x343e4b),
+	Brilho:   rgba(0x4263eb, 0.13), BrilhoVeu: transparente,
+	Elevado: hex(0x2a323d), Afundado: hex(0x11161c),
+	CardTinta: rgba(0x1e242d, 0.74), CardTintaH: rgba(0x1c222a, 0.96), CardBorda: hex(0x29313b),
+	Escuro: true,
 }
 
 // paletaMaterial põe a paleta do app no material.Theme da janela. É dela
@@ -292,31 +326,34 @@ var (
 	// SemiBold já vem embutida (ver fontes.go), então o avanço é o mesmo
 	// da regular e a grade não se mexe.
 	fonteMonoNegrito = font.Font{Typeface: "IBM Plex Mono, DejaVu Sans Mono, monospace", Weight: font.SemiBold}
-	fonteSans        = font.Font{Typeface: "IBM Plex Sans, Inter, Fira Sans, DejaVu Sans, sans-serif"}
-	fonteCond        = font.Font{Typeface: "IBM Plex Sans Condensed, Fira Sans Condensed, Fira Sans, DejaVu Sans, sans-serif"}
+	// Desde a repaginação da 2.9 o texto da interface é Space Grotesk e
+	// os títulos são Sora, as fontes da central do ChamadoJá (ver
+	// fontes.go). A Plex Sans segue na lista como reserva de glifo.
+	fonteSans = font.Font{Typeface: "Space Grotesk, IBM Plex Sans, Fira Sans, DejaVu Sans, sans-serif"}
+	// fonteSansMedia é o peso 500: rótulo de aba, botão e item de lista.
+	fonteSansMedia = font.Font{Typeface: "Space Grotesk, IBM Plex Sans, Fira Sans, DejaVu Sans, sans-serif", Weight: font.Medium}
+	// fonteTitulo: nome do app, título de página, nome de card e de grupo,
+	// números. Quase sempre em negrito() (SemiBold).
+	fonteTitulo = font.Font{Typeface: "Sora, IBM Plex Sans Condensed, Fira Sans, DejaVu Sans, sans-serif"}
 )
 
 // Tamanhos, um por classe do CSS original — assim o que muda aqui muda no
 // lugar certo, em vez de números soltos no meio do layout.
 const (
-	spHeroTitulo  = unit.Sp(32) // .hero-titulo
-	spHeroNum     = unit.Sp(27) // .hero-num
-	spHeroEyebrow = unit.Sp(10) // .hero-eyebrow
-	spHeroSub     = unit.Sp(10) // .hero-sub
-	spHeroCap     = unit.Sp(9)  // .hero-cap
 	spGrupoTitulo = unit.Sp(18) // .grupo-titulo
 	spSubgrupo    = unit.Sp(15) // .subgrupo-titulo
-	spGrupoCont   = unit.Sp(10) // .grupo-cont
-	spCardNome    = unit.Sp(17) // .card-nome
+	spCardNome    = unit.Sp(15) // .card-nome (17 até a 2.8; o card ficou mais baixo)
 	spCardHost    = unit.Sp(12) // .card-host
 	spCardMeta    = unit.Sp(9)  // .card-meta
-	spAbaNome     = unit.Sp(11) // .aba-nome
-	spBtnTopo     = unit.Sp(10) // .btn-topo
 	spRodape      = unit.Sp(11) // .rodape-info
-	spMarcaTopo   = unit.Sp(13) // .marca-topo
-	spMarcaSub    = unit.Sp(10) // .marca-sub
 	spSecundario  = unit.Sp(11) // .secundario
 	spCorpo       = unit.Sp(12) // .mono / corpo
+	// spRotulo: rótulo de formulário, aviso e texto de explicação em
+	// diálogo, em Space Grotesk (desde a 2.9; antes era a mono de 11).
+	spRotulo = unit.Sp(13)
+	// spNota: a nota curta de rodapé de diálogo ("Enter confirma", "o app
+	// será reaberto"), também em Space Grotesk.
+	spNota = unit.Sp(12)
 )
 
 func hex(v uint32) color.NRGBA {
@@ -405,204 +442,40 @@ func gradCSS(gtx layout.Context, size image.Point, anguloGraus float64,
 
 var transparente = color.NRGBA{}
 
-// fundoJanela: as três camadas do `window` do tema.py. Sem fundo variável
-// não existe vidro — translucidez sobre cor chapada resolve para outra cor
-// chapada, e o efeito some.
+// fundoJanela pinta a MOLDURA na janela inteira: topo, lateral e barra de
+// status ficam direto sobre ela, e a folha (fundoFolha) é pintada por cima,
+// só na área do conteúdo. É também quem refaz, quando preciso, a imagem da
+// folha (vidro.go), que serve de fundo à própria folha e ao vidro dos cards.
+//
+// Até a 2.8 o fundo era um gradiente na janela inteira com faixas
+// diagonais e dois blocos de texto no canto ("CONECTE / GERENCIE…"). Na
+// repaginação da 2.9 saíram: brigavam com os cards e davam à tela a cara
+// de "quebrada". O desenho agora é o da central do ChamadoJá — moldura de
+// um tom, folha de outro, luz no canto e a malha de hexágonos discreta no
+// cabeçalho do Painel (malhaHex).
 func fundoJanela(gtx layout.Context, size image.Point) {
-	area := clip.Rect{Max: size}.Push(gtx.Ops)
-	defer area.Pop()
-
-	// base (a de baixo, no CSS a última da lista)
-	gradCSS(gtx, size, 170, tema.Fundo1, 0, tema.Fundo3, 1)
-	// duas luzes de acento, ângulos opostos
-	gradCSS(gtx, size, 150, tema.Luz1, 0, transparente, 0.55)
-	gradCSS(gtx, size, 15, tema.Luz2, 0, transparente, 0.45)
-	fundoCanto(gtx, size)
-	// A cópia desfocada deste mesmo fundo, para o vidro dos cartões —
-	// ver vidro.go. Só refaz quando muda o tamanho, o tema ou a escala.
+	paint.FillShape(gtx.Ops, tema.Moldura, clip.Rect{Max: size}.Op())
 	atualizarFosco(gtx, size)
 }
 
-// fundoCanto desenha, sobre a janela inteira, faixas diagonais
-// translúcidas, uma grade de pontos no canto superior esquerdo, uma
-// linha com nós subindo pela borda direita e dois blocos de texto com
-// barra de gradiente — composição copiada à risca da segunda referência
-// aprovada por mockup (a primeira, com badges de protocolo, foi
-// descartada). NÃO reinventar layout se for ajustar de novo, só
-// cor/opacidade: são já a quinta tentativa nesta sessão de acertar o
-// fundo, as anteriores falharam por inventar em vez de copiar.
-//
-// As formas (faixas, grade, linha+nós) não mudam quadro a quadro — só
-// quando a janela muda de tamanho ou o tema troca — então ficam
-// gravadas uma vez (cantoOps/cantoCall) e só são reconstruídas quando
-// necessário; texto é a única parte redesenhada a cada quadro, porque
-// cachear texto entre quadros é mais delicado (shaping, cor do tema) e
-// sete linhas curtas não pesam o bastante pra valer o risco.
-var (
-	cantoOps     op.Ops
-	cantoCall    op.CallOp
-	cantoValido  bool
-	cantoTamanho image.Point
-	cantoEscuro  bool
-)
-
-func fundoCanto(gtx layout.Context, size image.Point) {
-	w, h := float32(size.X), float32(size.Y)
-	if w <= 0 || h <= 0 {
-		return
-	}
-
-	if !cantoValido || cantoTamanho != size || cantoEscuro != tema.Escuro {
-		cantoOps.Reset()
-		m := op.Record(&cantoOps)
-		fundoCantoFormas(&cantoOps, size)
-		cantoCall = m.Stop()
-		cantoValido, cantoTamanho, cantoEscuro = true, size, tema.Escuro
-	}
-	cantoCall.Add(gtx.Ops)
-
-	// blocos de texto, com barra de gradiente (roxo -> verde, mesmo
-	// acento do resto do app) por baixo de cada um.
-	if temaApp == nil {
-		return
-	}
-	txtCor := comAlfa(tema.Sec, cantoTxtAlfa)
-	for _, b := range blocosCanto {
-		x, y := w*cantoX, h*b.y
-		for i, s := range b.linhas {
-			pos := op.Offset(image.Pt(int(x), int(y)+i*cantoAltLinha)).Push(gtx.Ops)
-			txt(temaApp, fonteMono, unit.Sp(cantoTamFonte), s, txtCor).Layout(gtx)
-			pos.Pop()
-		}
-		by := y + float32(len(b.linhas))*cantoAltLinha + cantoBarraDy
-		pos := op.Offset(image.Pt(int(x), int(by))).Push(gtx.Ops)
-		gradCSS(gtx, image.Pt(cantoLargBarra, cantoAltBarra), 90, tema.Roxo, 0, tema.Verde, 1)
-		pos.Pop()
-	}
+// fundoFolha pinta a folha no recorte corrente: a imagem da folha (Pagina
+// com a luz no canto) ANCORADA NA JANELA — o mesmo pedaço que o vidro dos
+// cards mostra atrás deles e que a aba ativa usa para se fundir à folha,
+// então card, aba e folha nunca brigam de tom.
+func fundoFolha(gtx layout.Context, size image.Point) {
+	defer clip.Rect{Max: size}.Push(gtx.Ops).Pop()
+	pintarFolha(gtx)
 }
 
-// Geometria do canto, numa tabela só: fundoCanto desenha a partir dela e
-// o fundo fosco (vidro.go) a refaz desfocada. Duas cópias dos números
-// sairiam de sincronia na primeira mexida, e o vidro mostraria atrás do
-// cartão um fundo que não é o da janela.
-const (
-	cantoX       = 0.87
-	cantoTxtAlfa = 0.85
-	// ~2x o original (era 12/16/42/3) — 3x vazava pra fora da janela.
-	cantoTamFonte  = 24
-	cantoAltLinha  = 32
-	cantoLargBarra = 84
-	cantoAltBarra  = 6
-	cantoBarraDy   = 12
-)
-
-var blocosCanto = [...]struct {
-	y      float32
-	linhas []string
-}{
-	{0.234, []string{"CONECTE", "GERENCIE", "ACESSE", "CONTROLE"}},
-	{0.677, []string{"ACESSO", "REMOTO", "SEM LIMITES"}},
-}
-
-// faixaCanto é uma das faixas diagonais translúcidas do fundo.
-type faixaCanto struct {
-	cor color.NRGBA
-	pts [4]f32.Point
-}
-
-// faixasCanto devolve as faixas para uma janela w×h. Tema escuro entra
-// bem mais baixo de propósito — overlay translúcido sobre fundo quase
-// preto sai mais forte do que a conta em sRGB prevê (mesmo aviso de
-// sempre: LuzB, Luz1/Luz2, as tentativas anteriores de fundoCanto).
-func faixasCanto(w, h float32) [4]faixaCanto {
-	op1, op2 := 0.35, 0.20
-	if tema.Escuro {
-		// Eram 0,05/0,03: em linear, 5% de branco sobre quase preto vira
-		// uma faixa cinza forte, e o card que caía em cima dela ficava
-		// "lavado", com o texto secundário a 2,8:1. Pela metade, a faixa
-		// continua lá e o card deixa de desbotar.
-		op1, op2 = 0.025, 0.015
+// pintarFolha pinta a folha no recorte corrente, sem recorte próprio —
+// para quem já empurrou o molde (a aba ativa, o item ativo da lateral).
+func pintarFolha(gtx layout.Context) {
+	if fosco.ok {
+		fosco.img.Add(gtx.Ops)
+	} else {
+		paint.ColorOp{Color: tema.Pagina}.Add(gtx.Ops)
 	}
-	f1, f2 := comAlfa(hex(0xffffff), op1), comAlfa(hex(0xffffff), op2)
-	return [4]faixaCanto{
-		{f1, [4]f32.Point{{X: w * -0.06, Y: h * 0.29}, {X: w * 0.29, Y: h * -0.08}, {X: w * 0.46, Y: h * -0.08}, {X: w * 0.12, Y: h * 0.29}}},
-		{f1, [4]f32.Point{{X: w * 0.17, Y: h * 0.48}, {X: w * 0.58, Y: h * -0.08}, {X: w * 0.72, Y: h * -0.08}, {X: w * 0.31, Y: h * 0.48}}},
-		{f1, [4]f32.Point{{X: w * 0.40, Y: h * 0.73}, {X: w * 0.87, Y: h * 0.03}, {X: w * 0.98, Y: h * 0.03}, {X: w * 0.52, Y: h * 0.73}}},
-		{f2, [4]f32.Point{{X: w * 0.0, Y: h * 0.68}, {X: w * 0.35, Y: h * 0.19}, {X: w * 0.44, Y: h * 0.19}, {X: w * 0.09, Y: h * 0.68}}},
-	}
-}
-
-// fundoCantoFormas desenha só as formas (faixas, grade, linha+nós) num
-// *op.Ops qualquer — não precisa de layout.Context porque nenhuma delas
-// é texto. Separada de fundoCanto para poder ser gravada uma vez em
-// cantoOps e reaproveitada nos quadros seguintes.
-func fundoCantoFormas(o *op.Ops, size image.Point) {
-	w, h := float32(size.X), float32(size.Y)
-
-	// Opacidade da grade/linha (as faixas vêm de faixasCanto). Tema
-	// escuro entra bem mais baixo, pelo mesmo motivo das faixas.
-	pontoOp, linhaOp := 0.55, 0.5
-	if tema.Escuro {
-		pontoOp, linhaOp = 0.4, 0.3
-	}
-
-	poligono := func(cor color.NRGBA, pts ...f32.Point) {
-		var p clip.Path
-		p.Begin(o)
-		p.MoveTo(pts[0])
-		for _, pt := range pts[1:] {
-			p.LineTo(pt)
-		}
-		p.Close()
-		paint.FillShape(o, cor, clip.Outline{Path: p.End()}.Op())
-	}
-	for _, f := range faixasCanto(w, h) {
-		poligono(f.cor, f.pts[:]...)
-	}
-
-	// grade de pontos, canto superior esquerdo
-	pontoCor := comAlfa(tema.Sec, pontoOp)
-	if tema.Escuro {
-		pontoCor = comAlfa(tema.Fraco, pontoOp)
-	}
-	ponto := func(x, y, r float32) {
-		rr := clip.Ellipse{Min: image.Pt(int(x-r), int(y-r)), Max: image.Pt(int(x+r), int(y+r))}
-		paint.FillShape(o, pontoCor, rr.Op(o))
-	}
-	for r := 0; r < 4; r++ {
-		for c := 0; c < 8; c++ {
-			ponto(15+float32(c)*17, 100+float32(r)*17, 1.6)
-		}
-	}
-
-	// linha lateral direita, com nós
-	linhaCor := comAlfa(tema.Sec, linhaOp)
-	if tema.Escuro {
-		linhaCor = comAlfa(tema.Fraco, linhaOp)
-	}
-	{
-		var p clip.Path
-		p.Begin(o)
-		p.MoveTo(f32.Pt(w*0.98, h*0.016))
-		p.LineTo(f32.Pt(w*0.965, h*0.19))
-		p.LineTo(f32.Pt(w*0.975, h*0.39))
-		p.LineTo(f32.Pt(w*0.96, h*0.58))
-		p.LineTo(f32.Pt(w*0.968, h*0.77))
-		p.LineTo(f32.Pt(w*0.958, h*0.97))
-		paint.FillShape(o, linhaCor, clip.Stroke{Path: p.End(), Width: 1.2}.Op())
-	}
-	for _, n := range []f32.Point{
-		{X: w * 0.958, Y: h * 0.089}, {X: w * 0.964, Y: h * 0.242}, {X: w * 0.953, Y: h * 0.435},
-		{X: w * 0.965, Y: h * 0.629}, {X: w * 0.948, Y: h * 0.806},
-	} {
-		rr := clip.UniformRRect(image.Rect(int(n.X), int(n.Y), int(n.X)+9, int(n.Y)+9), 2)
-		paint.FillShape(o, linhaCor, clip.Stroke{Path: rr.Path(o), Width: 1.2}.Op())
-	}
-	for _, n := range []f32.Point{
-		{X: w * 0.965, Y: h * 0.19}, {X: w * 0.975, Y: h * 0.39}, {X: w * 0.96, Y: h * 0.58}, {X: w * 0.968, Y: h * 0.77},
-	} {
-		ponto(n.X, n.Y, 2.2)
-	}
+	paint.PaintOp{}.Add(gtx.Ops)
 }
 
 // comAlfa devolve c com a alfa recalculada a partir de uma fração
@@ -618,47 +491,6 @@ func comAlfa(c color.NRGBA, a float64) color.NRGBA {
 	}
 	c.A = uint8(math.Round(a * 255))
 	return c
-}
-
-// fundoHero: faixa escura que ancora a página (.hero).
-func fundoHero(gtx layout.Context, size image.Point) {
-	area := clip.Rect{Max: size}.Push(gtx.Ops)
-	defer area.Pop()
-
-	gradCSS(gtx, size, 115, tema.Hero1, 0, tema.Hero2, 1)
-	gradCSS(gtx, size, 160, tema.HeroLuz1, 0, transparente, 0.60)
-	gradCSS(gtx, size, 20, tema.HeroLuz2, 0, transparente, 0.50)
-}
-
-// fundoAbas: a tira de abas tem COR PRÓPRIA, sólida, e não o vidro
-// translúcido que ela usava antes. Translúcida ela pegava o tom do que
-// estivesse atrás e encostava tanto na faixa da janela quanto no conteúdo;
-// com as três faixas em tons distintos (janela mais escura, abas no meio,
-// conteúdo) dá pra ver onde uma acaba e a outra começa sem procurar.
-func fundoAbas(gtx layout.Context, size image.Point) {
-	area := clip.Rect{Max: size}.Push(gtx.Ops)
-	defer area.Pop()
-	gradCSS(gtx, size, 180, tema.Abas1, 0, tema.Abas2, 1)
-}
-
-// fundoCromo: lateral e outros cromos (180°, topo1 -> topo2).
-func fundoCromo(gtx layout.Context, size image.Point) {
-	area := clip.Rect{Max: size}.Push(gtx.Ops)
-	defer area.Pop()
-	gradCSS(gtx, size, 180, tema.Topo1, 0, tema.Topo2, 1)
-}
-
-// fundoTitulo: a faixa da janela (menu, marca, botões de janela).
-//
-// O gradiente vai do claro pro ESCURO de cima pra baixo, ao contrário do
-// cromo. Na primeira tentativa ele terminava claro justamente na emenda
-// com a tira de abas, e as duas faixas se fundiam — no tema claro dava pra
-// ver a diferença, no escuro não dava nenhuma. Terminando no tom mais
-// escuro, a emenda fica evidente nos dois temas.
-func fundoTitulo(gtx layout.Context, size image.Point) {
-	area := clip.Rect{Max: size}.Push(gtx.Ops)
-	defer area.Pop()
-	gradCSS(gtx, size, 180, tema.Titulo1, 0, tema.Titulo2, 1)
 }
 
 // ------------------------------------------------------------ formas

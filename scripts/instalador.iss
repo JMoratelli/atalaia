@@ -1,4 +1,4 @@
-; instalador.iss — instalador do Acessos para Windows.
+; instalador.iss — instalador do Atalaia Acessos para Windows.
 ;
 ; Não compila nada: empacota a pasta build/win/dist já pronta (o .exe e as
 ; DLLs que scripts/build-windows.sh resolveu). Rodar por ali:
@@ -16,7 +16,7 @@
 ; atualização" em vez de deixar duas cópias. NUNCA gerar outro depois da
 ; primeira distribuição. O "{{" é a forma de escapar uma chave literal.
 AppId={{ed9d32b6-0a74-44b1-9fbe-32becd35bdba}
-AppName=Acessos
+AppName=Atalaia Acessos
 AppVersion={#AppVersion}
 AppPublisher=Jurandir Moratelli
 ; sem admin: instala no perfil do usuário, como a versão Python fazia.
@@ -67,9 +67,17 @@ Source: "..\build\win\espera-icone.bmp"; Flags: dontcopy
 Source: "..\cmd\acessos\fontes\IBMPlexSans-SemiBold.ttf"; Flags: dontcopy
 Source: "..\cmd\acessos\fontes\IBMPlexMono-Regular.ttf"; Flags: dontcopy
 
+; Desde a 2.9 o nome visível é "Atalaia Acessos". O AppId, a pasta e o
+; grupo do Menu Iniciar continuam os de antes (o Inno reaproveita o grupo de
+; uma instalação anterior); só os atalhos ganham o nome novo, e os antigos
+; ("Acessos.lnk") saem em [InstallDelete], senão quem atualiza fica com dois.
+[InstallDelete]
+Type: files; Name: "{group}\Acessos.lnk"
+Type: files; Name: "{autodesktop}\Acessos.lnk"
+
 [Icons]
-Name: "{group}\Acessos"; Filename: "{app}\acessos.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\Acessos"; Filename: "{app}\acessos.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\Atalaia Acessos"; Filename: "{app}\acessos.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\Atalaia Acessos"; Filename: "{app}\acessos.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar um atalho na Área de Trabalho"; GroupDescription: "Atalhos adicionais:"
@@ -77,7 +85,7 @@ Name: "desktopicon"; Description: "Criar um atalho na Área de Trabalho"; GroupD
 [Run]
 ; skipifsilent: some quando a instalação é silenciosa — é o caso normal,
 ; interativo, com a caixa "abrir agora" ao final.
-Filename: "{app}\acessos.exe"; Description: "Abrir o Acessos agora"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\acessos.exe"; Description: "Abrir o Atalaia Acessos agora"; Flags: nowait postinstall skipifsilent
 ; skipifnotsilent: o complemento, para o atualizador (que SEMPRE roda
 ; /VERYSILENT) — reabre sem perguntar nada, já que não há tela para
 ; perguntar.
@@ -186,7 +194,7 @@ begin
   titulo.Font.Name := 'IBM Plex Sans SemiBold';
   titulo.Font.Size := 13;
   titulo.Font.Color := corTexto;
-  titulo.Caption := 'Atualizando o Acessos';
+  titulo.Caption := 'Atualizando o Atalaia Acessos';
   titulo.AutoSize := True;
   titulo.Left := (moldura.Width - titulo.Width) div 2;
   titulo.Top := ScaleY(144);

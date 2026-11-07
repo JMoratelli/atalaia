@@ -45,7 +45,7 @@ func temMenu() bool { return menuAtual != nil }
 
 var tagMenuFora = new(int)
 
-const menuLargura = unit.Dp(190)
+const menuLargura = unit.Dp(240)
 
 // layoutMenu desenha o menu ancorado na posição do clique. Clique fora
 // fecha — menu que só fecha escolhendo algo prende quem abriu por engano.
@@ -87,7 +87,7 @@ func layoutMenu(gtx layout.Context, th *material.Theme, janela *app.Window) layo
 	gtx.Constraints.Min.Y = 0
 
 	macro := op.Record(gtx.Ops)
-	dims := layout.Inset{Top: 4, Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	dims := layout.UniformInset(5).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		var filhos []layout.FlexChild
 		for _, it := range m.itens {
 			it := it
@@ -99,7 +99,7 @@ func layoutMenu(gtx layout.Context, th *material.Theme, janela *app.Window) layo
 							if h > 0 {
 								f := tema.Hover
 								f.A = uint8(float32(f.A)*h + 0.5)
-								superficie(gtx, gtx.Constraints.Min, f, transparente, 0)
+								superficie(gtx, gtx.Constraints.Min, f, transparente, 8)
 							}
 							return layout.Dimensions{Size: gtx.Constraints.Min}
 						},
@@ -114,8 +114,8 @@ func layoutMenu(gtx layout.Context, th *material.Theme, janela *app.Window) layo
 								cor = tema.ErroFg
 							}
 							gtx.Constraints.Min.X = gtx.Constraints.Max.X
-							return layout.Inset{Top: 7, Bottom: 7, Left: 12, Right: 12}.Layout(gtx,
-								txt(th, fonteSans, spCorpo, it.rotulo, cor).Layout)
+							return layout.Inset{Top: 8, Bottom: 8, Left: 11, Right: 11}.Layout(gtx,
+								txt(th, fonteSansMedia, unit.Sp(13), it.rotulo, cor).Layout)
 						},
 					)
 				})
@@ -142,8 +142,8 @@ func layoutMenu(gtx layout.Context, th *material.Theme, janela *app.Window) layo
 		y = 0
 	}
 	defer op.Offset(image.Pt(x, y)).Push(gtx.Ops).Pop()
-	sombra(gtx, dims.Size, 10)
-	superficieCartao(gtx, dims.Size, 10)
+	sombra(gtx, dims.Size, 12)
+	superficieCartao(gtx, dims.Size, 12)
 	conteudo.Add(gtx.Ops)
 	return dims
 }

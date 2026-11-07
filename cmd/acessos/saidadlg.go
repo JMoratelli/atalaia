@@ -36,7 +36,7 @@ func (d *dlgSaida) Corpo(gtx layout.Context, th *material.Theme) layout.Dimensio
 			gtx.Constraints.Max.Y = max
 			return layout.Background{}.Layout(gtx,
 				func(gtx layout.Context) layout.Dimensions {
-					superficie(gtx, gtx.Constraints.Min, tema.TermBg, tema.Borda2, 8)
+					superficie(gtx, gtx.Constraints.Min, tema.TermBg, tema.CardBorda, 12)
 					return layout.Dimensions{Size: gtx.Constraints.Min}
 				},
 				func(gtx layout.Context) layout.Dimensions {

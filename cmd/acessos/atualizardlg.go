@@ -60,7 +60,7 @@ func (d *dlgAtualizar) Corpo(gtx layout.Context, th *material.Theme) layout.Dime
 			fmt.Sprintf("A versão %s está disponível (você tem a %s).",
 				d.rel.Tag, versaoInstalada()), tema.Texto)),
 		espaco(6),
-		layout.Rigid(rotulo(th, fonteMono, spCardMeta,
+		layout.Rigid(rotulo(th, fonteSans, spNota,
 			"O app será fechado e reaberto — as sessões abertas se encerram.", tema.Sec)),
 	}
 	if baixando {
@@ -80,12 +80,12 @@ func (d *dlgAtualizar) Corpo(gtx layout.Context, th *material.Theme) layout.Dime
 		// sobe; no Windows fica até o instalador fechar este processo, que
 		// é o tempo em que a tela ficaria sem nada para mostrar.
 		filhos = append(filhos, espaco(8),
-			layout.Rigid(rotulo(th, fonteMono, spCardMeta,
+			layout.Rigid(rotulo(th, fonteSans, spNota,
 				"Instalando a atualização…", tema.Sec)))
 	}
 	if erro != "" {
 		filhos = append(filhos, espaco(8),
-			layout.Rigid(rotulo(th, fonteMono, spSecundario, erro, tema.ErroFg)))
+			layout.Rigid(rotulo(th, fonteSans, spRotulo, erro, tema.ErroFg)))
 	}
 	if !instalando {
 		filhos = append(filhos, espaco(14), layout.Rigid(func(gtx layout.Context) layout.Dimensions {

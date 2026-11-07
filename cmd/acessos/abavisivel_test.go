@@ -15,7 +15,6 @@ import (
 type abaDeTeste struct{ nome string }
 
 func (a *abaDeTeste) Title() string { return a.nome }
-func (a *abaDeTeste) SoIcone() bool { return false }
 func (a *abaDeTeste) Pinned() bool  { return false }
 func (a *abaDeTeste) Close()        {}
 func (a *abaDeTeste) Selo() (*widget.Icon, color.NRGBA, color.NRGBA) {

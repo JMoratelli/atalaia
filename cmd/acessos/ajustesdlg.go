@@ -191,15 +191,15 @@ func (d *dlgAjustes) Corpo(gtx layout.Context, th *material.Theme) layout.Dimens
 	// seguinte, e a mensagem não pode sumir junto com a aba que a gerou.
 	if d.erro != "" {
 		filhos = append(filhos, espaco(8),
-			layout.Rigid(rotulo(th, fonteMono, spSecundario, d.erro, tema.ErroFg)))
+			layout.Rigid(rotulo(th, fonteSans, spRotulo, d.erro, tema.ErroFg)))
 	}
 	if d.atencao != "" {
 		filhos = append(filhos, espaco(8),
-			layout.Rigid(rotulo(th, fonteMono, spSecundario, d.atencao, tema.AtencaoFg)))
+			layout.Rigid(rotulo(th, fonteSans, spRotulo, d.atencao, tema.AtencaoFg)))
 	}
 	if d.aviso != "" {
 		filhos = append(filhos, espaco(8),
-			layout.Rigid(rotulo(th, fonteMono, spSecundario, d.aviso, tema.OkFg)))
+			layout.Rigid(rotulo(th, fonteSans, spRotulo, d.aviso, tema.OkFg)))
 	}
 
 	filhos = append(filhos, espaco(14), layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -238,7 +238,7 @@ func (d *dlgAjustes) corpoArquivos(th *material.Theme) []layout.FlexChild {
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						larg := gtx.Dp(110)
 						gtx.Constraints.Min.X, gtx.Constraints.Max.X = larg, larg
-						return rotulo(th, fonteMono, spSecundario, rot, tema.Sec)(gtx)
+						return rotulo(th, fonteSansMedia, spRotulo, rot, tema.Sec)(gtx)
 					}),
 					layout.Flexed(1, rotulo(th, fonteMono, spSecundario, valor, tema.Texto)),
 				)
@@ -246,7 +246,7 @@ func (d *dlgAjustes) corpoArquivos(th *material.Theme) []layout.FlexChild {
 		})
 	}
 	return []layout.FlexChild{
-		layout.Rigid(rotulo(th, fonteMono, spSecundario, "conexões (arquivo em uso)", tema.Sec)),
+		layout.Rigid(rotulo(th, fonteSans, spRotulo, "conexões (arquivo em uso)", tema.Sec)),
 		espaco(4),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
@@ -289,8 +289,8 @@ func (d *dlgAjustes) corpoAtalho(th *material.Theme, autoIndo bool) []layout.Fle
 	// esperado, e avisar seria alarme sobre o que a pessoa acabou de pedir.
 	if d.atalhoOn && atalhoSemTecla() {
 		filhos = append(filhos, espaco(4), layout.Rigid(recuado(
-			rotulo(th, fonteMono, spSecundario,
-				"o sistema não amarrou nenhuma tecla — confira em Preferências do Sistema → Atalhos → Acessos",
+			rotulo(th, fonteSans, spRotulo,
+				"o sistema não amarrou nenhuma tecla — confira em Preferências do Sistema → Atalhos → Atalaia Acessos",
 				tema.AtencaoFg))))
 	}
 
@@ -305,7 +305,7 @@ func (d *dlgAjustes) corpoAtalho(th *material.Theme, autoIndo bool) []layout.Fle
 			}))
 		if autoIndo {
 			filhos = append(filhos, espaco(4), layout.Rigid(recuado(
-				rotulo(th, fonteMono, spSecundario,
+				rotulo(th, fonteSans, spRotulo,
 					"esperando a resposta do sistema…", tema.Sec))))
 		}
 	}

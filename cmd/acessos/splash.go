@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gioui.org/app"
+	"gioui.org/f32"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -49,6 +50,7 @@ type splash struct {
 	atual     int       // índice do passo em andamento (ou último alcançado)
 	desde     time.Time // quando o passo ATUAL começou
 	erro      string    // por que a última tentativa parou; "" = nenhuma
+	erroEm    time.Time // quando o erro apareceu (o favo vira "×" a partir daí)
 	proximaEm time.Time // reconexão automática agendada; zero = nenhuma
 
 	tickando atomic.Bool
@@ -126,6 +128,9 @@ func (s *splash) setErro(msg string) {
 	}
 	s.mu.Lock()
 	s.visivel = true
+	if s.erro == "" && msg != "" {
+		s.erroEm = time.Now()
+	}
 	s.erro = msg
 	s.mu.Unlock()
 	s.disparo.disparar(s.janela())
@@ -153,6 +158,7 @@ type splashFoto struct {
 	atual     int
 	desde     time.Time
 	erro      string
+	erroEm    time.Time
 	proximaEm time.Time
 	visivel   bool
 }
@@ -165,7 +171,7 @@ func (s *splash) foto() splashFoto {
 	defer s.mu.Unlock()
 	return splashFoto{
 		passos: s.passos, atual: s.atual, desde: s.desde,
-		erro: s.erro, proximaEm: s.proximaEm,
+		erro: s.erro, erroEm: s.erroEm, proximaEm: s.proximaEm,
 		visivel: s.visivel,
 	}
 }
@@ -182,7 +188,9 @@ func (s *splash) animar() {
 	}
 	go func() {
 		defer s.tickando.Store(false)
-		tk := time.NewTicker(200 * time.Millisecond)
+		// 30ms (~33 quadros/s): o favo pulsa em ciclos de 3s, e a 200ms
+		// o pulso andava aos solavancos. Só enquanto o cartão está à vista.
+		tk := time.NewTicker(30 * time.Millisecond)
 		defer tk.Stop()
 		for range tk.C {
 			if !s.foto().visivel {
@@ -242,7 +250,11 @@ func desenharSplash(gtx layout.Context, th *material.Theme, s *splash,
 			filhos = append(filhos,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return emblemaComHalo(gtx, ic, corAccent, agora)
+						desdeErro := -1.0
+						if f.erro != "" {
+							desdeErro = time.Since(f.erroEm).Seconds()
+						}
+						return favoConexao(gtx, ic, corAccent, agora, desdeErro)
 					})
 				}),
 				espaco(14),
@@ -308,43 +320,105 @@ func statusDoSplash(f splashFoto) (string, color.NRGBA) {
 	return "", tema.Sec
 }
 
-// emblemaComHalo é o "cartão de visita" da conexão: o ícone do protocolo
-// (o mesmo do Selo() da aba) dentro de um círculo, com um halo atrás que
-// respira de leve — o único traço "vivo" do cartão que não depende de
-// olhar para a trilha de passos.
-func emblemaComHalo(gtx layout.Context, ic *widget.Icon, cor color.NRGBA, agora float64) layout.Dimensions {
-	const badgeDp, haloDp = 52, 92
-	haloMax := gtx.Dp(haloDp)
-	lado := gtx.Dp(badgeDp)
+// suave é a curva smoothstep: começa e termina devagar, sem degrau.
+func suave(k float64) float64 { return k * k * (3 - 2*k) }
 
-	return layout.Stack{Alignment: layout.Center}.Layout(gtx,
-		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			// Tamanho E alfa mudam junto, feito respiração: só alfa (a
-			// primeira tentativa) era sutil demais pra se notar que
-			// estava mesmo animando, em vez de parado na primeira
-			// aparência.
-			onda := 0.5 + 0.5*math.Sin(agora*2*math.Pi/2.4)
-			diam := lado + int(float64(haloMax-lado)*onda)
-			off := (haloMax - diam) / 2
-			halo := cor
-			halo.A = uint8(70 * (1 - 0.6*onda))
-			r := image.Rect(off, off, off+diam, off+diam)
-			paint.FillShape(gtx.Ops, halo, clip.Ellipse(r).Op(gtx.Ops))
-			return layout.Dimensions{Size: image.Pt(haloMax, haloMax)}
-		}),
-		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			fundo := cor
-			fundo.A = 46
-			r := image.Rect(0, 0, lado, lado)
-			paint.FillShape(gtx.Ops, fundo, clip.Ellipse(r).Op(gtx.Ops))
-			paint.FillShape(gtx.Ops, cor, clip.Stroke{Path: clip.Ellipse(r).Path(gtx.Ops), Width: 1.2}.Op())
-			gtx.Constraints.Min = image.Pt(lado, lado)
-			gtx.Constraints.Max = gtx.Constraints.Min
-			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return icone(gtx, ic, cor, 24)
-			})
-		}),
-	)
+// favoConexao é o favo de carregamento da central do ChamadoJá, com o
+// ícone da conexão no hexágono do meio: seis hexágonos em volta acendem um
+// depois do outro (0,22s de diferença, em roda) num ciclo de 3s — aparecem
+// crescendo, ficam, e somem encolhendo um pouco —, na cor do protocolo.
+// Vale para as quatro abas (tela, shell, rdp, arquivos): todas desenham o
+// "conectando" por desenharSplash, cada uma com o próprio ícone e cor.
+// Com erro (desdeErro >= 0, segundos desde que ele apareceu) o favo para
+// e cada célula vira um "×" vermelho, desenhado do centro para fora em
+// cascata rápida; o hexágono do meio também fica vermelho.
+// Substitui o círculo com halo de antes, para o "conectando" falar a mesma
+// língua da malha de hexágonos do Painel.
+func favoConexao(gtx layout.Context, ic *widget.Icon, cor color.NRGBA, agora, desdeErro float64) layout.Dimensions {
+	R := float32(gtx.Dp(17)) // raio de cada célula (ponta para cima)
+	passo := R * float32(math.Sqrt(3))
+	lado := int(passo*3 + 2)
+	alt := int(R*5 + 2)
+	cx, cy := float32(lado)/2, float32(alt)/2
+
+	hexa := func(x, y, r float32) clip.PathSpec {
+		var p clip.Path
+		p.Begin(gtx.Ops)
+		for k := 0; k < 6; k++ {
+			a := math.Pi/3*float64(k) - math.Pi/2
+			pt := f32.Pt(x+r*float32(math.Cos(a)), y+r*float32(math.Sin(a)))
+			if k == 0 {
+				p.MoveTo(pt)
+			} else {
+				p.LineTo(pt)
+			}
+		}
+		p.Close()
+		return p.End()
+	}
+
+	r := R * 0.9 // folga entre as células
+	for i := 0; i < 6; i++ {
+		// vizinhas a 30° + 60°·i, no sentido do relógio a partir de cima
+		a := math.Pi/6 + math.Pi/3*float64(i) - math.Pi/2
+		x := cx + passo*float32(math.Cos(a))
+		y := cy + passo*float32(math.Sin(a))
+		if desdeErro >= 0 {
+			// a célula avermelha e o "×" se desenha do centro para fora
+			k := suave(min(max((desdeErro-0.06*float64(i))/0.4, 0), 1))
+			paint.FillShape(gtx.Ops, misturarCor(tinta(tema.Texto, 0.07), comAlfa(tema.ErroFg, 0.12), float32(k)),
+				clip.Outline{Path: hexa(x, y, r)}.Op())
+			if k > 0 {
+				b := r * 0.42 * float32(k)
+				var p clip.Path
+				p.Begin(gtx.Ops)
+				p.MoveTo(f32.Pt(x-b, y-b))
+				p.LineTo(f32.Pt(x+b, y+b))
+				p.MoveTo(f32.Pt(x+b, y-b))
+				p.LineTo(f32.Pt(x-b, y+b))
+				paint.FillShape(gtx.Ops, comAlfa(tema.ErroFg, 0.9*k),
+					clip.Stroke{Path: p.End(), Width: float32(gtx.Dp(2.2))}.Op())
+			}
+			continue
+		}
+		paint.FillShape(gtx.Ops, tinta(tema.Texto, 0.07), clip.Outline{Path: hexa(x, y, r)}.Op())
+		t := math.Mod(agora-0.22*float64(i), 3) / 3
+		if t < 0 {
+			t += 1
+		}
+		// Curvas suaves (smoothstep) nas duas pontas, e entrada e saída
+		// mais longas que as do favo da central: a célula acende e apaga
+		// sem degrau, e a cascata (0,22s entre vizinhas) corre em roda.
+		var o, esc float64
+		switch {
+		case t < 0.28: // aparece crescendo
+			k := suave(t / 0.28)
+			o, esc = k, 0.55+0.45*k
+		case t < 0.58:
+			o, esc = 1, 1
+		case t < 0.92: // some encolhendo um pouco
+			k := suave((t - 0.58) / 0.34)
+			o, esc = 1-k, 1-0.12*k
+		default:
+			o, esc = 0, 0.88
+		}
+		if o > 0 {
+			paint.FillShape(gtx.Ops, comAlfa(cor, 0.55*o), clip.Outline{Path: hexa(x, y, r*float32(esc))}.Op())
+		}
+	}
+	// o do meio: o ícone da conexão, fixo (vermelho com erro)
+	if desdeErro >= 0 {
+		cor = misturarCor(cor, tema.ErroFg, float32(suave(min(desdeErro/0.4, 1))))
+	}
+	fundo := comAlfa(cor, 0.16)
+	paint.FillShape(gtx.Ops, fundo, clip.Outline{Path: hexa(cx, cy, r)}.Op())
+	paint.FillShape(gtx.Ops, cor, clip.Stroke{Path: hexa(cx, cy, r), Width: float32(gtx.Dp(1.2))}.Op())
+	tam := gtx.Dp(20)
+	off := image.Pt(int(cx)-tam/2, int(cy)-tam/2)
+	st := op.Offset(off).Push(gtx.Ops)
+	icone(gtx, ic, cor, 20)
+	st.Pop()
+	return layout.Dimensions{Size: image.Pt(lado, alt)}
 }
 
 // trilhaPassos é a barra de progresso com uma bolinha por passo — feito
