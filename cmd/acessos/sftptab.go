@@ -272,6 +272,26 @@ func (t *sftpTab) conectar() {
 	t.mu.Unlock()
 	t.splash.concluir()
 
+	// Sinal de vida, como no terminal (ver sshvivo.go), e um vigia para a
+	// conexão que cai sozinha: antes a aba continuava "ATIVO" com a
+	// conexão morta, e o erro só aparecia na próxima operação. Fechar a
+	// aba ou trocar de máquina zera t.ssh ANTES de fechar, então não
+	// passam por aqui como queda.
+	go manterVivaSSH(sc)
+	go func() {
+		sc.Wait()
+		t.mu.Lock()
+		caiu := t.ssh == sc
+		if caiu {
+			t.cli, t.ssh, t.estado = nil, nil, "a conexão caiu"
+		}
+		t.mu.Unlock()
+		if caiu {
+			t.splash.setErro("a conexão caiu")
+			t.invalidar()
+		}
+	}()
+
 	inicio := "."
 	if lar, err := cli.Getwd(); err == nil {
 		inicio = lar

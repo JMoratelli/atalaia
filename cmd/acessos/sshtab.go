@@ -89,6 +89,11 @@ type sshTab struct {
 	selA, selB celula
 	selAtiva   bool
 	arrastando bool
+	// Duplo clique marca a palavra, triplo a linha: conta os cliques na
+	// mesma célula em sequência rápida.
+	ultimoClique time.Time
+	celClique    celula
+	cliques      int
 
 	// mouseRelatando: true entre o Press e o Release de uma sequência
 	// que está sendo REPORTADA pro remoto (htop, less, mc…) em vez de
@@ -426,6 +431,11 @@ func (t *sshTab) sessao() fimSessao {
 		cli.Close()
 	}()
 
+	// Sinal de vida enquanto a conexão existir (ver sshvivo.go): rede de
+	// loja derruba conexão parada sem avisar, e sem isto o terminal
+	// ficava com cara de vivo até a próxima tecla sumir.
+	go manterVivaSSH(cli)
+
 	t.mu.Lock()
 	t.cli, t.sess, t.entrada = cli, sess, entrada
 	reconexao := t.jaConectou
@@ -723,6 +733,14 @@ func (t *sshTab) colarDoSistema() {
 	bracketed := t.term.Mode()&vt10x.ModeBracketPaste != 0
 	t.term.Unlock()
 	if !bracketed {
+		// Sem colagem protegida, várias linhas no shell RODAM ao chegar:
+		// pergunta antes (ver sshcolar.go).
+		if n := linhasDoColar(texto); n > 1 {
+			naJanelaPrincipal(t.w, func() {
+				abrirDialogo(&dlgColarLinhas{texto: texto, n: n, colar: func() { t.enviar([]byte(texto)) }})
+			})
+			return
+		}
 		t.enviar([]byte(texto))
 		return
 	}
@@ -788,8 +806,28 @@ func (t *sshTab) HandlePointer(ev pointer.Event, _ image.Point) {
 			t.enviar(sequenciaMouse(modo, mousePress, botao, t.mods, c.x, c.y))
 			return
 		}
+		if ev.Buttons&pointer.ButtonSecondary != 0 {
+			t.menuDoTerminal()
+			return
+		}
 		if ev.Buttons&pointer.ButtonPrimary == 0 {
 			break
+		}
+		// Clique em sequência rápida na mesma célula: duplo marca a
+		// palavra, triplo a linha (ver sshselecao.go).
+		agora := time.Now()
+		t.mu.Lock()
+		if agora.Sub(t.ultimoClique) < 450*time.Millisecond && c == t.celClique {
+			t.cliques++
+		} else {
+			t.cliques = 1
+		}
+		t.ultimoClique, t.celClique = agora, c
+		n := t.cliques
+		t.mu.Unlock()
+		if n >= 2 {
+			t.marcarPorClique(c, n)
+			return
 		}
 		// Um clique simples LIMPA a seleção: é o que todo terminal faz, e
 		// é a única forma de desmarcar sem precisar de outro atalho.
@@ -855,6 +893,18 @@ func (t *sshTab) HandlePointer(ev pointer.Event, _ image.Point) {
 		}
 		c := t.celulaEm(ev.Position)
 		t.enviar(sequenciaMouse(modo, tipo, 0, t.mods, c.x, c.y))
+		return
+	} else if t.telaCheiaSemMouse() {
+		// nano, less, man sem modo de mouse: a roda vira seta, como no
+		// Konsole e no VTE ("alternate scroll"). Rolar o histórico ali não
+		// mostraria nada — a tela cheia não deixa histórico.
+		seta := setaBaixo
+		if ev.Scroll.Y < 0 {
+			seta = setaCima
+		} else if ev.Scroll.Y == 0 {
+			return
+		}
+		t.enviar([]byte(strings.Repeat(seta, 3)))
 		return
 	} else {
 		t.rolarHistorico(ev)
