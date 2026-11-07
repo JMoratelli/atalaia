@@ -59,6 +59,14 @@
   <url type="bugtracker">https://github.com/JMoratelli/atalaia/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.9.1" date="2026-11-07">
+      <description>
+        <p>O cartão de boas-vindas do Painel saiu na 2.9.0 com o nome de uma empresa escrito fixo acima da saudação. Agora a linha mostra só "Painel de acessos", e o nome da empresa aparece quando o inventário diz qual é: "empresa = ..." na seção [geral] do conexoes.ini.</p>
+        <p>A caixa do Ctrl+Shift+F12 voltou a ser vidro, com a área de trabalho aparecendo desfocada atrás dela, e no Linux passou a ter o tamanho certo: antes ela nascia com uma faixa vazia embaixo e, quando a busca achava uma máquina, cortava a borda de cima em vez de crescer.</p>
+        <p>Depois de instalar uma atualização, a janela da versão antiga passa a fechar sozinha; na passagem para a 2.9.0 ela ficava aberta ao lado da nova, como se nada tivesse acontecido. A correção vale a partir das atualizações instaladas por esta versão. Na execução em massa, "Sem conexão" e "falha de conexão" ganharam o acento que faltava.</p>
+        <p>O site do projeto ganhou capturas de tela da versão atual e uma documentação nova, com o inventário, o uso no dia a dia, a execução em massa, as senhas e o atalho global.</p>
+      </description>
+    </release>
     <release version="2.9.0" date="2026-11-07">
       <description>
         <p>O Acessos agora se chama Atalaia Acessos, com logo nova: uma tela com o prompt e três linhas de movimento chegando. O endereço do projeto passou a ser github.com/JMoratelli/atalaia, e quem tem uma versão antiga continua recebendo as atualizações normalmente.</p>
