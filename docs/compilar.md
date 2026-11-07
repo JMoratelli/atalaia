@@ -9,9 +9,9 @@
 ```
 
 O build não usa a rede: as dependências Go vêm de `vendor/` (que o script
-regenera) e as duas bibliotecas C, libvncserver e FreeRDP 3, são baixadas pelo
-`flatpak-builder` a partir dos pacotes com sha256 fixo no manifesto
-(`flatpak/org.jj.Acessos.yml`). A versão sai da primeira entrada do
+regenera), e o Go oficial e as duas bibliotecas C, libvncserver e FreeRDP 3,
+são baixados pelo `flatpak-builder` a partir dos pacotes com sha256 fixo no
+manifesto (`flatpak/org.jj.Acessos.yml`). A versão sai da primeira entrada do
 `flatpak/org.jj.Acessos.metainfo.xml`.
 
 ## Desenvolvimento
@@ -56,12 +56,15 @@ Nada é instalado no sistema e nada pede root. O script:
    binários do MSYS2 do mesmo sabor (`scripts/sysroot-msys2.py`, repositório
    `ucrt64` ou `mingw64`);
 2. gera o ícone a partir do mesmo SVG do Linux (`icones/acessos.svg`);
-3. compila com cgo, com VNC e RDP ligados;
-4. confere que o `.exe` e as DLLs ficaram no mesmo runtime C
+3. compila o `libvncclient.dll` a partir do código da LibVNCServer, com os
+   mesmos patches de segurança do Flatpak (`flatpak/patches/libvncserver/`),
+   no lugar do pacote do MSYS2, que não os tem;
+4. compila o app com cgo, com VNC e RDP ligados;
+5. confere que o `.exe` e as DLLs ficaram no mesmo runtime C
    (`scripts/crt-windows.sh`);
-5. resolve recursivamente as DLLs de que o `.exe` depende
+6. resolve recursivamente as DLLs de que o `.exe` depende
    (`scripts/dlls-windows.py`);
-6. no `--instalador`, compila `scripts/instalador.iss` com o Inno Setup rodando
+7. no `--instalador`, compila `scripts/instalador.iss` com o Inno Setup rodando
    num prefixo Wine próprio, em `build/win/wine`; o `~/.wine` do usuário fica
    intocado.
 

@@ -1,7 +1,13 @@
 # Patches de segurança sobre o LibVNCServer 0.9.15
 
-Aplicados pelo manifesto (`flatpak/org.jj.Acessos.yml`, módulo
-`libvncserver`) por cima do tarball da tag `LibVNCServer-0.9.15`.
+Aplicados por cima do tarball da tag `LibVNCServer-0.9.15` nos DOIS
+pacotes: no Flatpak pelo manifesto (`flatpak/org.jj.Acessos.yml`, módulo
+`libvncserver`) e, desde a 2.9.2, no Windows pelo passo 1b de
+`scripts/build-windows.sh`, que compila o `libvncclient.dll` com eles no
+lugar do pacote do MSYS2. Até a 2.9.1 o instalador do Windows levava a DLL
+do MSYS2 como veio, SEM nenhum destes patches. Mexeu aqui (patch novo,
+ordem, tarball), o build do Windows recompila sozinho: o carimbo dele leva
+o hash dos arquivos .patch.
 
 ## Por que existem
 

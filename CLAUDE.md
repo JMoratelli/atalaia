@@ -250,18 +250,19 @@
   as correções" eram verdade ao mesmo tempo.
 
   - **Última checagem: 2026-11-07** (pedida, fora do ciclo). Próxima: a
-    partir de 2026-12-07. Três achados que pedem providência, nenhum
-    aplicado ainda:
-    - **O instalador do Windows NÃO tem os patches de CVE do
-      libvncclient.** Os patches de `flatpak/patches/libvncserver/` só
-      entram no Flatpak; o Windows leva o `libvncclient.dll` pronto do
-      MSYS2 (`libvncserver-0.9.15-3` no sysroot), cujo PKGBUILD não
+    partir de 2026-12-07. Três achados que pediam providência; os dois
+    primeiros resolvidos na 2.9.2, o do FreeRDP esperando a 3.33.1:
+    - **[RESOLVIDO na 2.9.2: passo 1b do build-windows.sh] O instalador
+      do Windows NÃO tinha os patches de CVE do libvncclient.** Os
+      patches de `flatpak/patches/libvncserver/` só entravam no Flatpak;
+      o Windows levava o `libvncclient.dll` pronto do MSYS2 (`libvncserver-0.9.15-3` no sysroot), cujo PKGBUILD não
       aplica nenhum deles. Ficam de fora CVE-2026-32853 e as duas altas
       (CVE-2026-44988, CVE-2026-50538). Saída: compilar o libvncclient
       no `build-windows.sh` a partir do tarball, com os mesmos patches.
       Mesma armadilha de arquivo irmão de sempre, só que entre os dois
       pacotes.
-    - **O Flatpak compila com Go 1.27.1**: a extensão golang do runtime
+    - **[RESOLVIDO na 2.9.2: Go oficial 1.27.3 como fonte do manifesto]
+      O Flatpak compilava com Go 1.27.1**: a extensão golang do runtime
       25.08 parou nela (02/09); só a 26.08 recebe a 1.27.3. A 1.27.1 tem
       CVEs da biblioteca padrão que tocam o atualizador por HTTPS
       (GO-2026-6809 em crypto/x509, GO-2026-6607 em crypto/tls,
@@ -273,7 +274,8 @@
       3.33.0 com teste em host real se sair advisory crítico do lado
       cliente). O MSYS2 já serve a 3.33.0: apagar `build/win/sysroot`
       agora traz ela sem querer, com o Flatpak na 3.32.2.
-    - Menores: pkg/sftp 1.13.12 (endurece o parser do cliente), godbus
+    - [Na 2.9.2: sftp, godbus, x/image e o cherry-pick da tecla morta.]
+      Menores: pkg/sftp 1.13.12 (endurece o parser do cliente), godbus
       5.2.4 (panic e alocação por comprimento vindo de fora), x/image
       0.47 (9 vulns no tiff, que entra pelo go-text; risco baixo, fontes
       locais) — baratos, vão juntos numa próxima. x/crypto 0.58, x/net

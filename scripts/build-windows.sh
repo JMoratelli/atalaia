@@ -92,6 +92,71 @@ if [ ! -d "$SYSROOT/lib/pkgconfig" ]; then
     python3 scripts/sysroot-msys2.py --repo "$REPO" "$SAIDA" freerdp libvncserver
 fi
 
+# 1b. libvncclient COM os patches de segurança. O MSYS2 empacota a 0.9.15
+#     sem as correções do libvncclient (CVE-2026-32853, e as duas altas,
+#     CVE-2026-44988 e CVE-2026-50538): elas só existem no master do LibVNC,
+#     e o Flatpak as aplica por cima do tarball (flatpak/patches/libvncserver).
+#     Até a 2.9.1 o instalador do Windows levava a DLL do MSYS2 como veio —
+#     a mesma armadilha de arquivo irmão do CLAUDE.md, só que entre os dois
+#     pacotes. Aqui é o mesmo do Flatpak: o tarball da tag, com o mesmo
+#     sha256 do manifesto, os mesmos patches na mesma ordem, compilado pelo
+#     MESMO compilador do .exe (o runtime C confere no 4b) e com as mesmas
+#     opções do pacote do MSYS2 (o rfbconfig.h sai idêntico ao dele, então
+#     a estrutura rfbClient que o vncshim lê não muda). O resultado substitui
+#     a DLL, a biblioteca de importação e os cabeçalhos do MSYS2 no sysroot.
+#     Um carimbo evita recompilar quando nada mudou.
+VNC_VERSAO=0.9.15
+VNC_SHA256=62352c7795e231dfce044beb96156065a05a05c974e5de9e023d688d8ff675d7
+VNC_PATCHES="009008e2 5b270544 540332be"
+carimboVNC="$SYSROOT/.libvncclient-patcheado"
+querVNC="$VNC_VERSAO $VNC_PATCHES $(cat flatpak/patches/libvncserver/*.patch | sha256sum | cut -c1-16)"
+if [ "$(cat "$carimboVNC" 2>/dev/null)" != "$querVNC" ]; then
+    echo ">> compilando o libvncclient $VNC_VERSAO com os patches de segurança"
+    mkdir -p "$CACHE"
+    tarballVNC=$CACHE/LibVNCServer-$VNC_VERSAO.tar.gz
+    [ -f "$tarballVNC" ] || curl -fsSL -o "$tarballVNC" \
+        "https://github.com/LibVNC/libvncserver/archive/refs/tags/LibVNCServer-$VNC_VERSAO.tar.gz"
+    echo "$VNC_SHA256  $tarballVNC" | sha256sum -c --quiet
+    fonteVNC=$SAIDA/vnc-fonte
+    objVNC=$SAIDA/vnc-obj
+    rm -rf "$fonteVNC" "$objVNC"
+    mkdir -p "$fonteVNC"
+    tar -xzf "$tarballVNC" -C "$fonteVNC" --strip-components=1
+    for p in $VNC_PATCHES; do
+        patch -d "$fonteVNC" -p1 -s < "flatpak/patches/libvncserver/$p.patch"
+    done
+    cat > "$SAIDA/mingw.cmake" <<FIM
+set(CMAKE_SYSTEM_NAME Windows)
+set(CMAKE_C_COMPILER $CC)
+set(CMAKE_RC_COMPILER x86_64-w64-mingw32-windres)
+set(CMAKE_FIND_ROOT_PATH $SYSROOT)
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+FIM
+    cp scripts/pkg-config-mingw /tmp/acessos-pkg-config-mingw
+    chmod +x /tmp/acessos-pkg-config-mingw
+    PKG_CONFIG=/tmp/acessos-pkg-config-mingw \
+    PKG_CONFIG_LIBDIR="$SYSROOT/lib/pkgconfig" PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig" \
+    cmake -S "$fonteVNC" -B "$objVNC" -G "Unix Makefiles" \
+        -DCMAKE_TOOLCHAIN_FILE="$PWD/$SAIDA/mingw.cmake" \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DBUILD_SHARED_LIBS=ON -DWITH_EXAMPLES=OFF -DWITH_TESTS=OFF \
+        -DWITH_SDL=OFF -DWITH_GTK=OFF -DWITH_QT=OFF -DWITH_FFMPEG=OFF \
+        -DWITH_XCB=OFF -DWITH_LIBSSHTUNNEL=OFF -DWITH_SYSTEMD=OFF \
+        -DWITH_SASL=OFF -DWITH_WEBSOCKETS=OFF \
+        -DWITH_OPENSSL=ON -DWITH_GNUTLS=ON -DWITH_GCRYPT=ON \
+        -DWITH_PNG=ON -DWITH_JPEG=ON -DWITH_LZO=ON -DWITH_ZLIB=ON \
+        -DWITH_THREADS=ON -DPREFER_WIN32THREADS=OFF > "$SAIDA/vnc-cmake.log"
+    cmake --build "$objVNC" --target vncclient --parallel 1 > "$SAIDA/vnc-build.log"
+    cp "$objVNC/libvncclient.dll" "$SYSROOT/bin/libvncclient.dll"
+    cp "$objVNC/libvncclient.dll.a" "$SYSROOT/lib/libvncclient.dll.a"
+    cp "$fonteVNC"/include/rfb/*.h "$SYSROOT/include/rfb/"
+    cp "$objVNC/include/rfb/rfbconfig.h" "$SYSROOT/include/rfb/rfbconfig.h"
+    echo "$querVNC" > "$carimboVNC"
+fi
+
 # 2. ícone: um .ico multi-resolução a partir do mesmo SVG do Linux, para
 #    não haver duas artes divergindo com o tempo.
 ICO=$SAIDA/acessos.ico
