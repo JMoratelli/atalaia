@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sync"
+	"time"
 
 	"acessos-go/internal/atualizador"
 
@@ -134,7 +136,18 @@ func (d *dlgAtualizar) instalar() {
 		}
 		// A instância nova já está subindo; esta sai. No Windows é raro
 		// chegar aqui: o instalador costuma fechar este processo antes.
-		d.w.Perform(system.ActionClose)
+		//
+		// O fechamento vai pela fila do laço da janela, e não direto daqui:
+		// no Wayland o Perform roda na goroutine de quem chama, e o pedido
+		// feito desta goroutine ficava parado até a janela receber algum
+		// evento. Foi assim na passagem da 2.8.3 para a 2.9.0: a versão nova
+		// abriu e a velha continuou na tela, parecendo que nada tinha
+		// mudado. Se mesmo assim a janela não fechar, o processo sai: a
+		// instância nova já está de pé e duas abertas só confundem.
+		naJanelaPrincipalInsistindo(d.w, func() { d.w.Perform(system.ActionClose) })
+		time.Sleep(15 * time.Second)
+		fmt.Fprintln(os.Stderr, "atualização: a janela antiga não fechou; saindo")
+		os.Exit(0)
 	}()
 }
 
