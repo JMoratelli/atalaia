@@ -1,4 +1,4 @@
-# Manifesto Flatpak do Acessos (porte Go).
+# Manifesto Flatpak do Atalaia Acessos (porte Go; até a 2.8 o nome era só Acessos).
 #
 # MESMO app-id do app em Python: esta versão SUBSTITUI a anterior. Os dois
 # leem e escrevem os mesmos arquivos (~/.config/acessos), então instalar

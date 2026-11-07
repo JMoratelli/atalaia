@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
 Name=Atalaia Acessos
-GenericName=Acesso remoto a PDVs
-Comment=VNC, RDP, SSH e SFTP para o parque de PDVs
+GenericName=Acesso remoto
+Comment=VNC, RDP, SSH e SFTP em abas, numa janela só
 Exec=acessos
 Icon=org.jj.Acessos
 Terminal=false
 Categories=Network;RemoteAccess;System;
-Keywords=vnc;rdp;ssh;sftp;pdv;suporte;
+Keywords=atalaia;acesso remoto;vnc;rdp;ssh;sftp;terminal;pdv;suporte;
 # Precisa bater com o app_id que o app publica no Wayland (app.Title/ID),
 # senão o ambiente não casa a janela com este arquivo e mostra o ícone
 # genérico de executável no dock.
