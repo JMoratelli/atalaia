@@ -81,6 +81,10 @@ type massaTab struct {
 	ok, ruins    int
 	log          []string
 	corrente     *runner.Runner
+	// inicio e fim da última execução, para o cartão dizer quanto levou
+	// (ver massacolmeia.go).
+	inicio, fim time.Time
+	btnFavo     []widget.Clickable // um por máquina, na colmeia
 }
 
 // itemFila é um comando da fila, com de onde ele veio (para o operador
@@ -256,6 +260,7 @@ func (t *massaTab) executar() {
 		return
 	}
 	t.rodando = true
+	t.inicio, t.fim = time.Now(), time.Time{}
 	t.filaExecutada = fila
 	t.feitos, t.ok, t.ruins = 0, 0, 0
 	for _, e := range t.estados {
@@ -366,6 +371,7 @@ func (t *massaTab) executar() {
 		},
 		OnFim: func([]model.ResultadoHost) {
 			t.mu.Lock()
+			t.fim = time.Now()
 			t.rodando = false
 			t.corrente = nil
 			t.mu.Unlock()
@@ -429,9 +435,14 @@ func (t *massaTab) Layout(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 			// esquerda: o que rodar
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				larg := gtx.Dp(unit.Dp(330))
+				// O que rodar mora num cartão de vidro, como os painéis
+				// do SFTP.
+				larg := gtx.Dp(unit.Dp(340))
 				gtx.Constraints.Min.X = larg
 				gtx.Constraints.Max.X = larg
+				gtx.Constraints.Min.Y = gtx.Constraints.Max.Y
+				sombra(gtx, gtx.Constraints.Max, 14)
+				superficieVidro(gtx, gtx.Constraints.Max, tema.PainelTinta, tema.CardBorda, 14)
 				return t.painelComando(gtx)
 			}),
 			// direita: máquinas e resultado
@@ -445,7 +456,6 @@ func (t *massaTab) Layout(gtx layout.Context) layout.Dimensions {
 func (t *massaTab) painelComando(gtx layout.Context) layout.Dimensions {
 	t.mu.Lock()
 	rodando := t.rodando
-	feitos, ok, ruins := t.feitos, t.ok, t.ruins
 	t.mu.Unlock()
 
 	return layout.Inset{Top: 10, Bottom: 10, Left: 12, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -549,9 +559,6 @@ func (t *massaTab) painelComando(gtx layout.Context) layout.Dimensions {
 						return botaoPrimario(gtx, t.th, &t.btnRodar,
 							fmt.Sprintf("Executar em %d", len(t.cxs)))
 					}),
-					layout.Rigid(layout.Spacer{Width: 10}.Layout),
-					layout.Rigid(rotulo(t.th, fonteMono, spSecundario,
-						fmt.Sprintf("%d/%d · %d ok · %d falha", feitos, len(t.cxs), ok, ruins), tema.Sec)),
 				)
 			}),
 		)
@@ -590,8 +597,10 @@ func (t *massaTab) linhaSnippet(gtx layout.Context, i int) layout.Dimensions {
 // painelMaquinas lista as máquinas com o estado de cada uma. Status é cor
 // semântica: verde só quando terminou bem, vermelho só quando falhou.
 func (t *massaTab) painelMaquinas(gtx layout.Context) layout.Dimensions {
-	return layout.Inset{Top: 10, Bottom: 10, Left: 8, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return layout.Inset{Left: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(t.cartaoExecucao),
+			layout.Rigid(layout.Spacer{Height: 12}.Layout),
 			layout.Rigid(t.faixaPausa),
 			layout.Flexed(1, t.listaMaquinas),
 		)
@@ -626,6 +635,7 @@ func (t *massaTab) listaMaquinas(gtx layout.Context) layout.Dimensions {
 			return t.btnLinha[i].Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Background{}.Layout(gtx,
 					func(gtx layout.Context) layout.Dimensions {
+						sombra(gtx, gtx.Constraints.Min, 12)
 						superficie(gtx, gtx.Constraints.Min, tema.CardTinta, tema.CardBorda, 12)
 						return layout.Dimensions{Size: gtx.Constraints.Min}
 					},
@@ -636,12 +646,19 @@ func (t *massaTab) listaMaquinas(gtx layout.Context) layout.Dimensions {
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return chipEstado(gtx, t.th, chip, tipo)
+											return seloEstado(gtx, e.status)
 										}),
-										layout.Rigid(layout.Spacer{Width: 8}.Layout),
+										layout.Rigid(layout.Spacer{Width: 10}.Layout),
 										layout.Rigid(negrito(txt(t.th, fonteTitulo, spCardHost, cx.Nome, tema.Texto)).Layout),
 										layout.Rigid(layout.Spacer{Width: 8}.Layout),
 										layout.Flexed(1, rotulo(t.th, fonteMono, spCardMeta, cx.Host, tema.Fraco)),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											if tipo == "neutro" && chip == "—" {
+												return layout.Dimensions{}
+											}
+											return layout.Inset{Right: 10}.Layout(gtx,
+												negrito(txt(t.th, fonteMono, unit.Sp(9.5), chip, corClasse(classeDe(e.status)))).Layout)
+										}),
 										layout.Rigid(rotulo(t.th, fonteMono, spCardMeta, duracao(e.dur), tema.Fraco)),
 									)
 								}),
