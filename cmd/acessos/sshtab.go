@@ -823,12 +823,19 @@ func (t *sshTab) HandlePointer(ev pointer.Event, _ image.Point) {
 	case pointer.Release:
 		t.mu.Lock()
 		relatando, botao := t.mouseRelatando, t.mouseBotaoRel
+		arrastou := t.arrastando
+		selecionou, inicio := t.selAtiva, t.selA
 		t.mouseRelatando, t.arrastando = false, false
 		t.mu.Unlock()
 		if relatando {
 			c := t.celulaEm(ev.Position)
 			t.enviar(sequenciaMouse(modo, mouseRelease, botao, t.mods, c.x, c.y))
 			return
+		}
+		// Clique simples (apertou e soltou na mesma célula, sem seleção):
+		// leva o cursor até ali. Ver sshtab_cursor.go.
+		if c := t.celulaEm(ev.Position); arrastou && !selecionou && c == inicio && !t.mods.shift {
+			t.cliqueMoveCursor(c)
 		}
 		t.invalidar()
 		return
