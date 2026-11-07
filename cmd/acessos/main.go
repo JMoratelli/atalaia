@@ -433,6 +433,7 @@ var (
 	// único lugar desta pilha onde o estado dos modificadores é
 	// confiável — o key.Event do Gio não preenche Modifiers aqui.
 	ctrlDown             atomic.Bool
+	shiftDown            atomic.Bool // Shift+clique no SFTP marca uma faixa
 	pendingToggleSidebar atomic.Bool
 	pendingCloseActive   atomic.Bool
 	// pendingLimparFocoGio: o grab do Wayland entrega teclado cru a uma
@@ -1075,3 +1076,7 @@ func ultimaPosPonteiro() image.Point {
 // ctrlPressionado diz se o Ctrl está segurado agora. Serve para gestos de
 // mouse (Ctrl+clique para marcar arquivo no SFTP, Ctrl+roda no terminal).
 func ctrlPressionado() bool { return ctrlDown.Load() }
+
+// shiftPressionado: o mesmo, para o Shift (Shift+clique marca uma faixa de
+// arquivos no SFTP).
+func shiftPressionado() bool { return shiftDown.Load() }

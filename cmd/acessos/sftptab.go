@@ -17,12 +17,9 @@ import (
 
 	"gio.tools/icons"
 	"gioui.org/app"
-	"gioui.org/io/event"
 	"gioui.org/io/key"
 	"gioui.org/io/pointer"
 	"gioui.org/layout"
-	"gioui.org/op/clip"
-	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
@@ -66,28 +63,42 @@ type sftpTab struct {
 	local  painelArquivos
 	remoto painelArquivos
 
-	btnEnviar, btnBaixar   widget.Clickable
-	btnExcluir, btnNovaDir widget.Clickable
-	btnRec                 widget.Clickable
-	btnHost                widget.Clickable
-	trocarHost             func()
+	btnEnviar, btnBaixar widget.Clickable
+	btnRec               widget.Clickable
+	btnHost              widget.Clickable
+	trocarHost           func()
 
 	progresso string
 	ocupado   bool
 	msg       string
 	msgErro   bool
+	// Números da transferência em curso, para a barra do rodapé (o
+	// progresso em texto continua indo para a barra da sessão).
+	progFeito, progTotal int64
+	progArquivo          string
+	progI, progN         int
+	progInicio           time.Time
 
-	// Arrastar e soltar entre os painéis. O Gio não traz "arrastar item
-	// de lista" pronto; o que existe é o evento de ponteiro. Guardamos
-	// onde o arrasto começou e, ao soltar do outro lado, transferimos o
-	// que estiver SELECIONADO — pegar a seleção inteira (e não o item sob
-	// o cursor) é de propósito: arrastar 20 arquivos de uma vez é o caso
-	// que faz o gesto valer a pena.
+	// Arrastar e soltar entre os painéis (ver sftppainel.go). O Gio não
+	// traz "arrastar item de lista" pronto; o que existe é o evento de
+	// ponteiro, numa área por cima da aba inteira.
 	tagArrasto *int
 	arrastando bool
-	origemDir  bool // o arrasto começou no painel local?
-	posArrasto image.Point
-	larguraEsq int // onde termina o painel local
+	origem     *painelArquivos // de onde o arrasto saiu
+	posArrasto image.Point     // onde o botão desceu
+	posAtual   image.Point     // onde o ponteiro está agora
+	itensArr   []itemArquivo   // o que vai junto
+	// O item sob o botão no momento do aperto, anotado pela lista: é ele
+	// que vai quando o arrasto começa fora da seleção (como em qualquer
+	// gerenciador de arquivos), e não a seleção antiga.
+	pressPainel *painelArquivos
+	pressNome   string
+	// O item sob o ponteiro (sem botão), para o menu do botão direito.
+	sobPainel *painelArquivos
+	sobNome   string
+	// ativo é o último painel em que se clicou: é nele que o Delete, o F2
+	// e o Enter agem.
+	ativo *painelArquivos
 }
 
 // listagem é o resultado de ler uma pasta. Ela NÃO é aplicada por quem
@@ -116,6 +127,23 @@ type painelArquivos struct {
 	btnAcima widget.Clickable
 	btnAtual widget.Clickable
 	erro     string
+
+	// Ferramentas do cabeçalho do painel (ver sftppainel.go).
+	btnNovaDir, btnRenomear, btnExcluir widget.Clickable
+	// Caminho em migalhas; clicar no vazio ao lado abre a edição.
+	btnMigalha []widget.Clickable
+	btnEditar  widget.Clickable
+	editando   bool
+	focouCam   bool
+	// ancora é o último item clicado sem Shift: Shift+clique marca do
+	// ancora até o item clicado.
+	ancora string
+	// Onde o painel e a lista ficaram no último quadro, em coordenadas da
+	// aba: o arrasto usa isso para saber sobre qual painel (e sobre qual
+	// pasta) o ponteiro está.
+	area   image.Rectangle
+	listaY int
+	linhaH int
 }
 
 type itemArquivo struct {
@@ -420,7 +448,7 @@ func (t *sftpTab) conflitos(itens []itemArquivo, destino string, paraRemoto bool
 
 // transferir roda numa goroutine própria: copiar 200MB não pode segurar a
 // interface, e o progresso precisa aparecer enquanto anda.
-func (t *sftpTab) transferir(itens []itemArquivo, paraRemoto bool, pular map[string]bool) {
+func (t *sftpTab) transferir(itens []itemArquivo, paraRemoto bool, pular map[string]bool, pasta string) {
 	cli := t.cliente()
 	if cli == nil {
 		return
@@ -429,6 +457,9 @@ func (t *sftpTab) transferir(itens []itemArquivo, paraRemoto bool, pular map[str
 	if !paraRemoto {
 		origem, destino = t.remoto.caminho.Text(), t.local.caminho.Text()
 	}
+	if pasta != "" {
+		destino = pasta // soltou em cima de uma pasta do outro lado
+	}
 
 	t.mu.Lock()
 	t.ocupado = true
@@ -436,6 +467,7 @@ func (t *sftpTab) transferir(itens []itemArquivo, paraRemoto bool, pular map[str
 	defer func() {
 		t.mu.Lock()
 		t.ocupado, t.progresso = false, ""
+		t.progFeito, t.progTotal, t.progArquivo, t.progI, t.progN = 0, 0, "", 0, 0
 		t.mu.Unlock()
 		if paraRemoto {
 			t.listarRemoto()
@@ -454,13 +486,18 @@ func (t *sftpTab) transferir(itens []itemArquivo, paraRemoto bool, pular map[str
 		total += a.tam
 	}
 
+	t.mu.Lock()
+	t.progTotal, t.progN, t.progInicio = total, len(arquivos), time.Now()
+	t.mu.Unlock()
+
 	enviados := 0
-	for _, a := range arquivos {
+	for i, a := range arquivos {
 		if t.encerrada() {
 			return
 		}
 		t.mu.Lock()
 		t.progresso = fmt.Sprintf("%s — %s de %s", a.rel, tamanhoBytes(feito), tamanhoBytes(total))
+		t.progArquivo, t.progI, t.progFeito = a.rel, i+1, feito
 		t.mu.Unlock()
 		t.invalidar()
 
@@ -469,6 +506,7 @@ func (t *sftpTab) transferir(itens []itemArquivo, paraRemoto bool, pular map[str
 			feito += n
 			t.mu.Lock()
 			t.progresso = fmt.Sprintf("%s — %s de %s", a.rel, tamanhoBytes(feito), tamanhoBytes(total))
+			t.progFeito = feito
 			t.mu.Unlock()
 		}
 		if paraRemoto {
@@ -549,19 +587,38 @@ func (t *sftpTab) definirMsg(s string, erro bool) {
 // levantar conta o que será apagado, recursivamente. O número é o que a
 // confirmação mostra: "3 arquivos" e "1 pasta com 400 dentro" são coisas
 // muito diferentes para quem vai clicar.
-func (t *sftpTab) levantar(itens []itemArquivo) (arquivos, pastas int) {
+func (t *sftpTab) levantar(p *painelArquivos, itens []itemArquivo) (arquivos, pastas int) {
 	cli := t.cliente()
-	base := t.remoto.caminho.Text()
-	var anda func(p string)
-	anda = func(p string) {
-		ents, err := cli.ReadDir(p)
-		if err != nil {
-			return
+	base := p.caminho.Text()
+	var anda func(dir string)
+	anda = func(dir string) {
+		var ents []os.FileInfo
+		if p.remoto {
+			if cli == nil {
+				return
+			}
+			l, err := cli.ReadDir(dir)
+			if err != nil {
+				return
+			}
+			ents = l
+		} else {
+			l, err := os.ReadDir(dir)
+			if err != nil {
+				return
+			}
+			for _, e := range l {
+				// Link para pasta NÃO é pasta para esta conta: apagar
+				// segue o os.RemoveAll, que remove o link e não entra.
+				if info, err := e.Info(); err == nil {
+					ents = append(ents, info)
+				}
+			}
 		}
 		for _, e := range ents {
 			if e.IsDir() {
 				pastas++
-				anda(path.Join(p, e.Name()))
+				anda(juntarLado(dir, e.Name(), p.remoto))
 				continue
 			}
 			arquivos++
@@ -570,12 +627,35 @@ func (t *sftpTab) levantar(itens []itemArquivo) (arquivos, pastas int) {
 	for _, it := range itens {
 		if it.dir {
 			pastas++
-			anda(path.Join(base, it.nome))
+			anda(juntarLado(base, it.nome, p.remoto))
 			continue
 		}
 		arquivos++
 	}
 	return
+}
+
+// juntarLado junta caminho com a separação do lado: o remoto é sempre
+// POSIX, o local segue o sistema.
+func juntarLado(base, nome string, remoto bool) string {
+	if remoto {
+		return path.Join(base, nome)
+	}
+	return filepath.Join(base, nome)
+}
+
+// excluirLocal apaga na máquina local, depois da mesma confirmação com
+// contagem que o remoto pede.
+func (t *sftpTab) excluirLocal(itens []itemArquivo) {
+	base := t.local.caminho.Text()
+	for _, it := range itens {
+		if err := os.RemoveAll(filepath.Join(base, it.nome)); err != nil {
+			t.definirMsg(err.Error(), true)
+			break
+		}
+	}
+	t.listarLocal()
+	t.invalidar()
 }
 
 func (t *sftpTab) excluirRemoto(itens []itemArquivo) {
@@ -716,31 +796,6 @@ func (t *sftpTab) aplicarListagens() {
 	}
 }
 
-func (t *sftpTab) Layout(gtx layout.Context) layout.Dimensions {
-	t.aplicarListagens()
-	t.tratarBotoes(gtx)
-	defer t.arrasto(gtx)
-
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					d := t.painel(gtx, &t.local, "ESTA MÁQUINA")
-					t.larguraEsq = d.Size.X
-					return d
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return t.colunaBotoes(gtx)
-				}),
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return t.painel(gtx, &t.remoto, "MÁQUINA REMOTA")
-				}),
-			)
-		}),
-		layout.Rigid(t.rodape),
-	)
-}
-
 // comCtrl diz se o clique veio com Ctrl. São DUAS fontes de propósito: no
 // Linux o teclado vem do Wayland cru (internal/grab), e o Modifiers do
 // Gio chega vazio nesta pilha; no Windows não há grab nenhum, e o
@@ -750,102 +805,13 @@ func comCtrl(ev widget.Click) bool {
 	return ctrlPressionado() || ev.Modifiers.Contain(key.ModCtrl)
 }
 
-func (t *sftpTab) tratarBotoes(gtx layout.Context) {
-	for _, p := range []*painelArquivos{&t.local, &t.remoto} {
-		p := p
-		itensVisiveis := p.visiveis()
-		if p.btnAcima.Clicked(gtx) {
-			t.subir(p)
-		}
-		if p.btnAtual.Clicked(gtx) {
-			if p.remoto {
-				go t.listarRemoto()
-			} else {
-				t.listarLocal()
-			}
-		}
-		// Enter no campo de caminho: recarrega com o texto TAL QUAL foi
-		// digitado (sem juntar com nome nenhum, diferente de navegar()) —
-		// é o mesmo caminho que o botão ⟳ usa.
-		for {
-			ev, ok := p.caminho.Update(gtx)
-			if !ok {
-				break
-			}
-			if _, submeteu := ev.(widget.SubmitEvent); submeteu {
-				if p.remoto {
-					go t.listarRemoto()
-				} else {
-					t.listarLocal()
-				}
-			}
-		}
-		botoes := p.btnItem
-		for i := range botoes {
-			if i >= len(itensVisiveis) {
-				continue
-			}
-			// Gesto de gerenciador de arquivos: clique simples marca SÓ
-			// aquele item (o resto desmarca), Ctrl+clique soma e tira da
-			// marcação, e dois cliques numa pasta entram nela.
-			//
-			// Antes o clique simples não fazia nada, e o resultado era
-			// clicar num arquivo e a tela não responder — sem pista de
-			// que faltava o Ctrl. Marcar um item com um clique não custa
-			// nada (o que abre a pasta são DOIS cliques) e dá o retorno
-			// que faltava.
-			for {
-				ev, ok := botoes[i].Update(gtx)
-				if !ok {
-					break
-				}
-				it := itensVisiveis[i]
-				if it.dir && ev.NumClicks >= 2 {
-					t.navegar(p, it.nome)
-					break
-				}
-				if comCtrl(ev) {
-					p.sel[it.nome] = !p.sel[it.nome]
-					continue
-				}
-				clear(p.sel)
-				p.sel[it.nome] = true
-			}
-		}
-	}
-
-	if t.btnEnviar.Clicked(gtx) {
-		t.iniciarTransferencia(selecionados(&t.local), true)
-	}
-	if t.btnBaixar.Clicked(gtx) {
-		t.iniciarTransferencia(selecionados(&t.remoto), false)
-	}
-	if t.btnNovaDir.Clicked(gtx) {
-		t.criarPasta()
-	}
-	if t.btnExcluir.Clicked(gtx) {
-		itens := selecionados(&t.remoto)
-		if len(itens) == 0 {
-			return
-		}
-		arquivos, pastas := t.levantar(itens)
-		var lista []string
-		for _, it := range itens {
-			lista = append(lista, it.nome)
-		}
-		lista = append(lista, fmt.Sprintf("total: %d arquivo(s) e %d pasta(s) — na MÁQUINA REMOTA (%s)",
-			arquivos, pastas, t.host))
-		// A contagem regressiva é para LOTE: apagar um arquivo solto com
-		// três segundos de espera irrita sem proteger nada. Ela entra
-		// quando há vários itens ou quando tem pasta no meio — aí o
-		// estrago é recursivo e o operador precisa do freio.
-		emLote := len(itens) > 1 || pastas > 0
-		confirmarDestrutivoEm(t.w, "Excluir no remoto", lista, "Excluir definitivamente",
-			emLote, func() { go t.excluirRemoto(itens) })
-	}
+func (t *sftpTab) iniciarTransferencia(itens []itemArquivo, paraRemoto bool) {
+	t.iniciarTransferenciaPara(itens, paraRemoto, "")
 }
 
-func (t *sftpTab) iniciarTransferencia(itens []itemArquivo, paraRemoto bool) {
+// iniciarTransferenciaPara manda para uma pasta escolhida do outro lado
+// (soltar em cima dela); pasta vazia é a pasta aberta no outro painel.
+func (t *sftpTab) iniciarTransferenciaPara(itens []itemArquivo, paraRemoto bool, pasta string) {
 	// Nada aqui pode falhar calado: transferência que "não vai" sem dizer
 	// por quê é pior que erro na cara.
 	if len(itens) == 0 {
@@ -872,209 +838,27 @@ func (t *sftpTab) iniciarTransferencia(itens []itemArquivo, paraRemoto bool) {
 	if !paraRemoto {
 		destino = t.local.caminho.Text()
 	}
+	if pasta != "" {
+		destino = pasta
+	}
 	conf := t.conflitos(itens, destino, paraRemoto)
 	if len(conf) == 0 {
-		go t.transferir(itens, paraRemoto, nil)
+		go t.transferir(itens, paraRemoto, nil, pasta)
 		return
 	}
 	// três saídas, como no original: sobrescrever, pular os existentes
 	// (os demais vão assim mesmo) ou cancelar tudo.
 	abrirDialogo(&dlgConflito{
 		w: t.w, nomes: conf,
-		sobrescrever: func() { go t.transferir(itens, paraRemoto, nil) },
+		sobrescrever: func() { go t.transferir(itens, paraRemoto, nil, pasta) },
 		pular: func() {
 			pular := map[string]bool{}
 			for _, n := range conf {
 				pular[n] = true
 			}
-			go t.transferir(itens, paraRemoto, pular)
+			go t.transferir(itens, paraRemoto, pular, pasta)
 		},
 	})
-}
-
-func (t *sftpTab) criarPasta() {
-	cli := t.cliente()
-	if cli == nil {
-		return
-	}
-	abrirDialogo(&dlgTexto{
-		w: t.w, titulo: "Nova pasta", dica: "nome da pasta",
-		ok: func(nome string) error {
-			if strings.TrimSpace(nome) == "" {
-				return fmt.Errorf("o nome não pode ficar vazio")
-			}
-			if err := cli.Mkdir(path.Join(t.remoto.caminho.Text(), nome)); err != nil {
-				return err
-			}
-			go t.listarRemoto()
-			return nil
-		},
-	})
-}
-
-func (t *sftpTab) colunaBotoes(gtx layout.Context) layout.Dimensions {
-	larg := gtx.Dp(120)
-	gtx.Constraints.Min.X, gtx.Constraints.Max.X = larg, larg
-	return layout.Inset{Top: 40, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoPrimario(gtx, t.th, &t.btnEnviar, "enviar →")
-			}),
-			espaco(6),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoPrimario(gtx, t.th, &t.btnBaixar, "← baixar")
-			}),
-			espaco(16),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoSutil(gtx, t.th, &t.btnNovaDir, "+ pasta")
-			}),
-			espaco(6),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return botaoPerigo(gtx, t.th, &t.btnExcluir, "excluir")
-			}),
-		)
-	})
-}
-
-func (t *sftpTab) painel(gtx layout.Context, p *painelArquivos, titulo string) layout.Dimensions {
-	th := t.th
-	return layout.Inset{Top: 8, Bottom: 8, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					layout.Rigid(negrito(txt(th, fonteMono, spCardMeta, titulo, tema.Sec)).Layout),
-					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						return layout.Dimensions{Size: gtx.Constraints.Min}
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return botaoSutil(gtx, th, &p.btnAcima, "↑")
-					}),
-					layout.Rigid(layout.Spacer{Width: 4}.Layout),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						// "↻" e não "⟳": a IBM Plex embutida tem o
-						// primeiro e não tem o segundo, e no Windows o
-						// que falta na fonte do app não cai em fonte
-						// nenhuma do sistema — vira quadradinho vazio.
-						// Ver glifos_test.go.
-						return botaoSutil(gtx, th, &p.btnAtual, "↻")
-					}),
-					layout.Rigid(layout.Spacer{Width: 6}.Layout),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						n, total := len(p.visiveis()), len(p.itens)
-						texto := fmt.Sprintf("%d", total)
-						if n != total {
-							texto = fmt.Sprintf("%d de %d", n, total)
-						}
-						return rotulo(th, fonteMono, spCardMeta, texto, tema.Fraco)(gtx)
-					}),
-				)
-			}),
-			espaco(4),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return caixaEditor(gtx, th, &p.caminho, "caminho", 0)
-			}),
-			espaco(4),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return caixaEditor(gtx, th, &p.filtro, "filtrar nesta pasta…", 0)
-			}),
-			espaco(6),
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				return layout.Background{}.Layout(gtx,
-					func(gtx layout.Context) layout.Dimensions {
-						superficie(gtx, gtx.Constraints.Min, tinta(tema.Texto, 0.03), tema.CardBorda, 12)
-						return layout.Dimensions{Size: gtx.Constraints.Min}
-					},
-					func(gtx layout.Context) layout.Dimensions {
-						gtx.Constraints.Min = gtx.Constraints.Max
-						return layout.UniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							// O splash só cobre o painel REMOTO: o local não
-							// depende de rede nenhuma e continua usável
-							// (navegar, escolher o que vai subir) enquanto se
-							// espera a conexão — diferente de RDP/VNC/SSH,
-							// onde não há "metade útil" da aba para deixar
-							// livre.
-							if p.remoto && t.cliente() == nil {
-								icSftp, corSftp, _ := t.Selo()
-								return desenharSplash(gtx, t.th, t.splash,
-									fmt.Sprintf("%s@%s:%d", t.user, t.host, t.porta), icSftp, corSftp,
-									&t.btnSplash, func() { go t.conectar() })
-							}
-							if p.erro != "" {
-								return layout.Center.Layout(gtx, rotulo(th, fonteMono, spCardMeta, p.erro, tema.ErroFg))
-							}
-							return t.listaArquivos(gtx, p)
-						})
-					},
-				)
-			}),
-		)
-	})
-}
-
-func (t *sftpTab) listaArquivos(gtx layout.Context, p *painelArquivos) layout.Dimensions {
-	th := t.th
-	itens := p.visiveis()
-	return material.List(th, &p.lista).Layout(gtx, len(itens), func(gtx layout.Context, i int) layout.Dimensions {
-		it := itens[i]
-		marcado := p.sel[it.nome]
-		return p.btnItem[i].Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Background{}.Layout(gtx,
-				func(gtx layout.Context) layout.Dimensions {
-					fundo, borda := transparente, transparente
-					switch {
-					case marcado:
-						fundo, borda = tema.AzulFraco, tema.Azul
-					case p.btnItem[i].Hovered():
-						fundo = tinta(tema.Texto, 0.06)
-					}
-					superficie(gtx, gtx.Constraints.Min, fundo, borda, 8)
-					return layout.Dimensions{Size: gtx.Constraints.Min}
-				},
-				func(gtx layout.Context) layout.Dimensions {
-					gtx.Constraints.Min.X = gtx.Constraints.Max.X
-					return layout.Inset{Top: 3, Bottom: 3, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						ic, cor := icons.ActionDescription, tema.Sec
-						if it.dir {
-							ic, cor = icons.FileFolder, tema.AtencaoFg
-						}
-						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								return icone(gtx, ic, cor, 14)
-							}),
-							layout.Rigid(layout.Spacer{Width: 6}.Layout),
-							layout.Flexed(1, rotuloLinha(th, fonteMono, spCorpo, it.nome, tema.Texto)),
-							layout.Rigid(rotuloLinha(th, fonteMono, spCardMeta, tamanhoHumano(it), tema.Fraco)),
-							layout.Rigid(layout.Spacer{Width: 8}.Layout),
-							layout.Rigid(rotuloLinha(th, fonteMono, spCardMeta, it.mtime.Format("02/01/06 15:04"), tema.Fraco)),
-						)
-					})
-				},
-			)
-		})
-	})
-}
-
-func (t *sftpTab) rodape(gtx layout.Context) layout.Dimensions {
-	t.mu.Lock()
-	msg, erro, prog := t.msg, t.msgErro, t.progresso
-	t.mu.Unlock()
-	texto, cor := msg, tema.Sec
-	if erro {
-		cor = tema.ErroFg
-	}
-	if prog != "" {
-		texto, cor = "transferindo "+prog, tema.AtencaoFg
-	}
-	if t.arrastando {
-		texto, cor = "solte do outro lado para transferir", tema.AtencaoFg
-	}
-	if texto == "" {
-		texto = fmt.Sprintf("%d selecionado(s) aqui · %d no remoto · arraste entre os painéis para transferir",
-			len(selecionados(&t.local)), len(selecionados(&t.remoto)))
-		cor = tema.Fraco
-	}
-	return layout.Inset{Top: 4, Bottom: 8, Left: 12, Right: 12}.Layout(gtx,
-		rotuloLinha(t.th, fonteMono, spSecundario, texto, cor))
 }
 
 // tamanhoHumano: pasta não mostra tamanho (o do inode não diz nada).
@@ -1090,67 +874,6 @@ func tamanhoHumano(it itemArquivo) string {
 		n /= 1024
 	}
 	return fmt.Sprintf("%.1f TB", n)
-}
-
-var _ = unit.Dp(0)
-
-// arrasto detecta o gesto de arrastar entre os painéis. A área é uma só,
-// por cima de tudo e com PassOp — por baixo ela não receberia nada (o
-// hit-test do Gio salta para o nó pai ao encontrar área sem passagem), e
-// com PassOp os cliques normais das listas continuam funcionando.
-func (t *sftpTab) arrasto(gtx layout.Context) {
-	for {
-		ev, ok := gtx.Source.Event(pointer.Filter{
-			Target: t.tagArrasto,
-			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
-		})
-		if !ok {
-			break
-		}
-		pe, isP := ev.(pointer.Event)
-		if !isP {
-			continue
-		}
-		pos := image.Pt(int(pe.Position.X), int(pe.Position.Y))
-		esquerda := pos.X < t.larguraEsq
-
-		switch pe.Kind {
-		case pointer.Press:
-			if !pe.Buttons.Contain(pointer.ButtonPrimary) {
-				continue
-			}
-			t.arrastando = false
-			t.origemDir = esquerda
-			t.posArrasto = pos
-		case pointer.Drag:
-			// só vira arrasto depois de andar um tanto: sem essa folga,
-			// todo clique com a mão trêmula viraria transferência.
-			if !t.arrastando && abs(pos.X-t.posArrasto.X)+abs(pos.Y-t.posArrasto.Y) > gtx.Dp(12) {
-				t.arrastando = true
-			}
-		case pointer.Release:
-			if !t.arrastando {
-				continue
-			}
-			t.arrastando = false
-			if esquerda == t.origemDir {
-				continue // soltou do mesmo lado: não é transferência
-			}
-			if t.origemDir {
-				t.iniciarTransferencia(selecionados(&t.local), true)
-			} else {
-				t.iniciarTransferencia(selecionados(&t.remoto), false)
-			}
-		case pointer.Cancel:
-			t.arrastando = false
-		}
-	}
-
-	pass := pointer.PassOp{}.Push(gtx.Ops)
-	area := clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops)
-	event.Op(gtx.Ops, t.tagArrasto)
-	area.Pop()
-	pass.Pop()
 }
 
 func abs(n int) int {

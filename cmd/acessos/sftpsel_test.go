@@ -26,6 +26,11 @@ func sftpDeTeste(t *testing.T, dir string) *sftpTab {
 	ab.local.sel = map[string]bool{}
 	ab.remoto.remoto = true
 	ab.remoto.sel = map[string]bool{}
+	// Como no newSFTPTab: sem isto a lista sai HORIZONTAL e só a primeira
+	// linha cabe na tela do teste.
+	ab.local.lista.Axis = layout.Vertical
+	ab.remoto.lista.Axis = layout.Vertical
+	ab.tagArrasto = new(int)
 	ab.listarLocal()
 	return ab
 }

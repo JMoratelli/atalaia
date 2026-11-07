@@ -53,6 +53,9 @@ func tratarEventoPlataforma(est *estadoJanela, w *app.Window, e event.Event, act
 				if keysym == ctrlL || keysym == ctrlR {
 					ctrlDown.Store(pressed)
 				}
+				if keysym == 0xffe1 || keysym == 0xffe2 { // Shift_L, Shift_R
+					shiftDown.Store(pressed)
+				}
 				// F12 LIMPO, e não "qualquer coisa + F12": o atalho
 				// global do sistema é Ctrl+Shift+F12, e sem esta
 				// checagem ele recolhia a lateral em vez de abrir a

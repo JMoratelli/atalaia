@@ -115,6 +115,7 @@ func tratarTecladoFrame(est *estadoJanela, gtx layout.Context, activeTab func() 
 			if !e.Focus {
 				kb.soltarTudo()
 				ctrlDown.Store(false)
+				shiftDown.Store(false)
 			}
 			// Ganhou ou perdeu, as travas são lidas de novo: fora da
 			// janela o operador pode ter mexido nelas.
@@ -127,6 +128,9 @@ func tratarTecladoFrame(est *estadoJanela, gtx layout.Context, activeTab func() 
 		case key.Event:
 			if e.Name == key.NameCtrl {
 				ctrlDown.Store(e.State == key.Press)
+			}
+			if e.Name == key.NameShift {
+				shiftDown.Store(e.State == key.Press)
 			}
 			if teclaDeTrava(e) {
 				kb.travasLidas = false
