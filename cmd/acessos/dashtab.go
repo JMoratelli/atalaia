@@ -396,7 +396,7 @@ func (d *dashTab) cabecalho(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-						layout.Rigid(negrito(txt(d.th, fonteMono, unit.Sp(11), "MACHADÃO CORP · PAINEL DE ACESSOS", tema.Fraco)).Layout),
+						layout.Rigid(negrito(txt(d.th, fonteMono, unit.Sp(11), d.sobretitulo(), tema.Fraco)).Layout),
 						layout.Rigid(layout.Spacer{Height: 6}.Layout),
 						layout.Rigid(negrito(txt(d.th, fonteTitulo, unit.Sp(26), saudacao(gtx.Now), tema.Texto)).Layout),
 						layout.Rigid(layout.Spacer{Height: 6}.Layout),
@@ -495,6 +495,20 @@ func lerPrimeiroNome() string {
 		}
 	}
 	return maiusculaInicial(nome)
+}
+
+// sobretitulo é a linha miúda acima da saudação. O nome da empresa vem do
+// [geral] empresa do inventário, quando existe; sem ele, só o nome do
+// painel. Na 2.9.0 o nome de uma empresa saiu FIXO aqui, para todo mundo.
+func (d *dashTab) sobretitulo() string {
+	const painel = "PAINEL DE ACESSOS"
+	if d.arq == nil {
+		return painel
+	}
+	if empresa := strings.TrimSpace(d.arq.Geral["empresa"]); empresa != "" {
+		return strings.ToUpper(empresa) + " · " + painel
+	}
+	return painel
 }
 
 func maiusculaInicial(s string) string {

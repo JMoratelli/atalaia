@@ -13,7 +13,7 @@ import (
 // Erros de transporte. Erro de conexao e tratado de forma diferente de
 // erro de comando: conexao nunca abre dialogo, so vai para o erro.txt.
 var (
-	ErrConexao    = errors.New("falha de conexao")
+	ErrConexao    = errors.New("falha de conexão")
 	ErrAutenticar = errors.New("falha de autenticacao")
 	ErrElevar     = errors.New("falha ao elevar privilegio")
 	// ErrPreparo: conectou e autenticou, mas o shell remoto nao chegou

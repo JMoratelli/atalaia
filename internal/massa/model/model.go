@@ -86,7 +86,7 @@ func (s StatusExec) String() string {
 	case StatusErro:
 		return "Erro"
 	case StatusFalhaConexao:
-		return "Sem conexao"
+		return "Sem conexão"
 	case StatusPulado:
 		return "Pulado"
 	case StatusTimeout:

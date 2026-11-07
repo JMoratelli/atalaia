@@ -271,7 +271,7 @@ func (d *dlgConexao) Corpo(gtx layout.Context, th *material.Theme) layout.Dimens
 		linhaW("grupo", func(gtx layout.Context) layout.Dimensions {
 			return d.grupo.layout(gtx, th, "Loja 06;Caixas  (subgrupos com ;)")
 		}),
-		linha("host", &d.host, "192.168.8.101"),
+		linha("host", &d.host, "192.168.0.10"),
 		// Opcional, e por isso a dica diz para que serve em vez de dar um
 		// exemplo de formato: campo em branco não vira linha no .ini.
 		linha("descrição", &d.descricao, "opcional — o que diferencia esta máquina"),
